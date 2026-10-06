@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Temporary test artifacts and intermediate screenshots
+test_artifacts/
+scratch/
+*.mp4
+qc_*.png
+final_*.png
+screenshot_*.png
+step1_*.png
+movie_*.png
+native_*.png
+master_*.png
+frame_*.png
+twist_*.png
+perfect_*.png
+cover_*.png
+test_*.png
+ui_*.png
+Ảnh*.png
+test_crop_emblem.png
+test_square_icon.png
+logo_transparent.png
+pdf_page_*.png
+original_pdf_page1.png
+*_topdown_*.png
+mp4_frame_*.png
+*.txt
+renderer/
+
+# Test & Automation scripts (local only)
+test_*.py
+export_*.py
+generate_*.py
+local_render_*.py
+start_local_render.ps1
+
+# Vercel
+.vercel/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#08182b">
+  <title>Qbiz Book Motion · Tạo video lật sách 3D</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+  <meta property="og:title" content="Qbiz Book Motion · 3D Flipbook Motion & Video Mockup">
+  <meta property="og:description" content="Tạo video lật sách 3D điện ảnh từ PDF / ảnh, uốn cong giấy tự nhiên và xuất MP4 1080p.">
+  <meta property="og:image" content="logo-square.png">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#">
+      <img class="brand-logo" src="logo.png" alt="Qbiz Book Motion Logo" width="36" height="36">
+      <span><b>Qbiz</b> Book Motion<small>PDF / ẢNH → SÁCH 3D LẬT TRANG → VIDEO 1080P</small></span>
+    </a>
+    <span class="privacy"><i></i> Xử lý trực tiếp trên máy</span>
+  </header>
+
+  <main class="workspace">
+    <section class="stage-column">
+      <div class="stage-head">
+        <div>
+          <div class="eyebrow">3D FLIPBOOK ENGINE · HIỆU ỨNG UỐN CONG THẬT <span class="live-dot"></span></div>
+          <h1 id="stageHeading">Qbiz Book Motion · Video lật sách 3D</h1>
+          <p id="stageSub">Nạp PDF hoặc ảnh để tự dựng sách 3D, mở bìa, uốn cong lật trang và xuất MP4 1080p.</p>
+        </div>
+        <div class="head-actions">
+          <button id="resetCamera" class="icon-button" title="Đưa camera về góc ban đầu">⟳</button>
+          <button id="fullScreen" class="icon-button" title="Phóng to khung xem">⛶</button>
+        </div>
+      </div>
+
+      <div class="stage-shell scene-white" id="stageShell">
+        <div class="stage-grid"></div>
+        <div class="render-label"><span>3D BOOK ENGINE</span><span id="qualityLabel">60 FPS · SMOOTH BEND</span></div>
+        <div id="stage"></div>
+        <div class="stage-empty" id="emptyState">
+          <div class="empty-book">▱</div>
+          <b>Không gian dựng sách 3D</b>
+          <span>Nhập PDF / JPG / PNG để tạo sách và lật trang tự động</span>
+          <button class="primary" id="emptyImport">Chọn tài liệu PDF / Ảnh <span>↗</span></button>
+          <small>Có thể bấm nhanh nút "Nguyên tắc Ăn uống.pdf" ở bên phải</small>
+        </div>
+        <div class="scene-caption">
+          <span class="scene-swatch"></span>
+          <b id="sceneName">Studio trắng</b><span>·</span>
+          <span id="cameraName">Top View (Từ trên xuống)</span>
+          <span class="spacer"></span>
+          <span id="pageCount">0 trang</span>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="play-button" id="playButton" aria-label="Phát">▶</button>
+        <span class="transport-label">Xem chuyển động</span>
+        <div class="time-read"><b id="currentTime">00:00.0</b><span>/</span><span id="duration">00:10.0</span></div>
+        <input type="range" id="timeline" min="0" max="10" step="0.02" value="0" aria-label="Kéo để xem từng đoạn video">
+        <span class="recipe-tag"><i></i> VIDEO 10 GIÂY</span>
+      </div>
+
+      <div class="timeline-ruler">
+        <span>00:00</span>
+        <div class="markers">
+          <i style="left:0%" title="0.0s: Đóng sách"></i>
+          <i style="left:12%" title="1.2s: Bắt đầu mở bìa"></i>
+          <i style="left:23%" title="2.3s: Dừng đọc trang 1"></i>
+          <i style="left:45%" title="4.5s: Uốn cong lật trang"></i>
+          <i style="left:55%" title="5.5s: Dừng đọc trang 2"></i>
+          <i style="left:75%" title="7.5s: Lật tiếp"></i>
+          <i style="left:88%" title="8.8s: Đóng sách"></i>
+          <i style="left:100%" title="10.0s: Hoàn tất"></i>
+        </div>
+        <span>00:10</span>
+      </div>
+    </section>
+
+    <aside class="controls">
+      <div class="controls-scroll">
+        <section class="control-section upload-section">
+          <div class="section-title">
+            <span class="step-number">01</span>
+            <div><b>Tài liệu (PDF / Ảnh)</b><small>PDF hoặc danh sách ảnh các trang</small></div>
+          </div>
+          <label class="dropzone" id="dropzone">
+            <input id="fileInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple>
+            <span class="upload-icon">↑</span>
+            <b>Thả file vào đây</b>
+            <span>hoặc <u>chọn từ thiết bị</u></span>
+            <small>PDF · JPG · PNG · WEBP</small>
+          </label>
+          <label class="cover-mode">
+            <input id="firstPageIsCover" type="checkbox" checked>
+            <span><b>Trang đầu là bìa</b><small>Trang 1 làm bìa trước; các trang sau làm ruột sách</small></span>
+          </label>
+          <div id="documentInfo" class="document-info" hidden>
+            <span class="file-icon">▤</span>
+            <span class="file-details"><b id="fileName">Tài liệu</b><small id="fileMeta"></small></span>
+            <button id="removeFile" class="remove-file" title="Gỡ file">×</button>
+          </div>
+          <div class="samples">
+            <span>FILE MẪU</span>
+            <button data-pdf-sample id="btnSamplePdf" style="font-weight:700;color:#0d6efd;border-color:#0d6efd;">Nguyên tắc Ăn uống.pdf</button>
+            <button data-sample="sample-covers/nutrition-cover.svg">Dinh dưỡng</button>
+            <button data-sample="sample-covers/travel-cover.svg">Khám phá</button>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title">
+            <span class="step-number">02</span>
+            <div><b>Khung video</b><small>Chọn tỷ lệ xuất bản</small></div>
+          </div>
+          <div class="ratio-grid">
+            <button class="ratio active" data-ratio="16:9"><span class="ratio-icon wide"></span><span>16:9 (Ngang)</span></button>
+            <button class="ratio" data-ratio="4:3"><span class="ratio-icon standard"></span><span>4:3 (Chuẩn)</span></button>
+            <button class="ratio" data-ratio="9:16"><span class="ratio-icon tall"></span><span>9:16 (Dọc)</span></button>
+            <button class="ratio" data-ratio="1:1"><span class="ratio-icon square"></span><span>1:1 (Vuông)</span></button>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <div class="section-title">
+            <span class="step-number">03</span>
+            <div><b>Bối cảnh & Góc camera</b><small>Kéo xoay 3D · lăn chuột zoom</small></div>
+          </div>
+          <div class="field-label">PHÔNG NỀN (SCENE)</div>
+          <div class="choice-row">
+            <button class="choice active" data-scene="white"><i class="swatch white"></i>Studio trắng</button>
+            <button class="choice" data-scene="navy"><i class="swatch navy"></i>Premium Navy</button>
+          </div>
+          <div class="field-label second">GÓC NHÌN (CAMERA)</div>
+          <div class="choice-row camera-row">
+            <button class="choice active" data-camera="top">Top View (Từ trên xuống)</button>
+            <button class="choice" data-camera="reader">Reader View</button>
+            <button class="choice" data-camera="product">Product 45°</button>
+          </div>
+        </section>
+
+        <section class="control-section motion-section">
+          <div class="section-title">
+            <span class="step-number">04</span>
+            <div><b>Kịch bản lật sách · 10s</b><small>Tự động mở bìa → đọc → lật trang → đóng</small></div>
+          </div>
+          <div class="recipe-card">
+            <div class="recipe-head">
+              <span class="recipe-icon">◷</span>
+              <span><b>Chu trình chuyển động 10s</b><small>Đóng (1.2s) → Mở bìa (2.3s) → Đọc 1 → Lật trang (5.5s) → Đọc 2 → Đóng (10s)</small></span>
+              <span class="recipe-duration">10s</span>
+            </div>
+            <div class="phase-list">
+              <span>ĐÓNG</span><span>MỞ BÌA</span><span>ĐỌC 1</span><span>LẬT TRANG</span><span>ĐỌC 2</span><span>KHÉP LẠI</span>
+            </div>
+          </div>
+          <details class="advanced">
+            <summary>Tùy chỉnh vật liệu & độ dày <span>⌄</span></summary>
+            <label class="slider-label">Độ dày gáy sách <output id="thicknessOut">18 mm</output></label>
+            <input id="thickness" type="range" min="8" max="44" value="18">
+            <label class="slider-label">Độ cong trang khi lật <output id="curlAmountOut">100%</output></label>
+            <input id="curlAmount" type="range" min="50" max="180" value="100">
+          </details>
+        </section>
+      </div>
+
+      <footer class="export-footer">
+        <div class="export-summary">
+          <div>
+            <b>XUẤT VIDEO MP4 (1080P)</b>
+            <small id="exportFormat">1920 × 1080 (16:9 Ngang) · Chuẩn H.264</small>
+          </div>
+          <span class="badge-ready">SẴN SÀNG</span>
+        </div>
+        <button class="export-button" id="exportButton" disabled>
+          <span>▶</span> Xuất video MP4 1080p (H.264)
+        </button>
+      </footer>
+    </aside>
+  </main>
+
+  <section class="storyboard-section">
+    <div class="storyboard-heading">
+      <div>
+        <span class="eyebrow">BLUEPRINT HỆ THỐNG · 13 MODULE CHUẨN</span>
+        <h2>Kiến trúc 3D Book Motion</h2>
+        <p>13 Module quy chuẩn: từ đầu vào PDF/ảnh, tạo sách 3D, mở bìa, hiệu ứng lật trang 6 pha, camera, vật liệu và xuất video 1080p.</p>
+      </div>
+    </div>
+    <div class="photo-references" style="grid-template-columns:1fr;">
+      <figure style="margin:0 auto;max-width:1080px;width:100%;">
+        <img src="blueprint_13_modules.jpg" alt="13 Module Chuẩn QBiz Book Motion" style="width:100%;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.25);">
+        <figcaption style="text-align:center;margin-top:10px;font-size:14px;color:#8899aa;">Bản thiết kế 13 khối chuẩn cho hệ thống lật sách 3D QBiz Book Motion</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <input id="hiddenInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple hidden>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="three.min.js"></script>
+  <script src="OrbitControls.js"></script>
+  <script src="mp4-muxer.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="app.js?v=20261006-06"></script>
+</body>
+</html>
