@@ -286,6 +286,7 @@
         if (v.material) {
           (Array.isArray(v.material) ? v.material : [v.material]).forEach(m => {
             if (m.map) m.map.dispose?.();
+            if (m.normalMap && m.normalMap !== app.paperNormalTexture) m.normalMap.dispose?.();
             m.dispose?.();
           });
         }
@@ -295,6 +296,60 @@
     app.pageTextures = [];
     if (app.coverTexture) app.coverTexture.dispose();
     app.coverTexture = null;
+  }
+
+  // TẠO BẢN ĐỒ PHÁP TUYẾN SỢI GIẤY CELLULOSE PBR (PROCEDURAL PBR PAPER GRAIN)
+  function getPaperNormalTexture() {
+    if (app.paperNormalTexture) return app.paperNormalTexture;
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(size, size);
+    const data = imgData.data;
+
+    // Sinh độ cao vi hạt ngẫu nhiên định hướng thớ giấy in
+    const heights = new Float32Array(size * size);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = y * size + x;
+        const n1 = Math.sin(x * 0.45) * Math.cos(y * 0.45);
+        const n2 = Math.sin(x * 0.95 + y * 0.65) * 0.5;
+        const n3 = (Math.random() - 0.5) * 0.7;
+        heights[i] = n1 * 0.25 + n2 * 0.25 + n3 * 0.5;
+      }
+    }
+
+    // Bộ lọc Sobel chuyển đổi sang Normal Map (RGB ứng với vector pháp tuyến X, Y, Z)
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const idx = y * size + x;
+        const left = heights[y * size + ((x - 1 + size) % size)];
+        const right = heights[y * size + ((x + 1) % size)];
+        const up = heights[((y - 1 + size) % size) * size + x];
+        const down = heights[((y + 1) % size) * size + x];
+
+        const dx = (right - left) * 1.5;
+        const dy = (down - up) * 1.5;
+        const dz = 1.0;
+        const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+        const pIdx = idx * 4;
+        data[pIdx] = Math.floor(((dx / len) * 0.5 + 0.5) * 255);
+        data[pIdx + 1] = Math.floor(((dy / len) * 0.5 + 0.5) * 255);
+        data[pIdx + 2] = Math.floor(((dz / len) * 0.5 + 0.5) * 255);
+        data[pIdx + 3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(6, 8);
+    app.paperNormalTexture = tex;
+    return tex;
   }
 
   function makeBook(pages) {
@@ -325,9 +380,19 @@
     app.bookGroup.add(leftStackMesh);
     app.leftStack = leftStackMesh;
 
+    // Bản đồ pháp tuyến sợi giấy PBR và độ nhám mịn vật lý
+    const paperNorm = getPaperNormalTexture();
+    const paperNormScale = new THREE.Vector2(0.038, 0.038);
+
     // Gáy sách (Spine)
-    const spineGeom = new THREE.CylinderGeometry(thick * 0.45, thick * 0.45, H, 16, 1, false, -Math.PI / 2, Math.PI);
-    const spineMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+    const spineGeom = new THREE.CylinderGeometry(thick * 0.45, thick * 0.45, H, 24, 1, false, -Math.PI / 2, Math.PI);
+    const spineMat = new THREE.MeshStandardMaterial({
+      color: 0x182230,
+      roughness: 0.65,
+      metalness: 0.05,
+      normalMap: paperNorm,
+      normalScale: new THREE.Vector2(0.05, 0.05)
+    });
     const spine = new THREE.Mesh(spineGeom, spineMat);
     spine.rotation.x = Math.PI / 2;
     spine.position.set(0, -thick * 0.2, 0);
@@ -336,7 +401,13 @@
 
     // Bìa sau (Back Cover) nằm dưới khối sách bên phải khi đóng
     const backCoverGeom = new THREE.BoxGeometry(W + 0.02, 0.018, H + 0.02);
-    const backCoverMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+    const backCoverMat = new THREE.MeshStandardMaterial({
+      color: 0x182230,
+      roughness: 0.65,
+      metalness: 0.05,
+      normalMap: paperNorm,
+      normalScale: new THREE.Vector2(0.05, 0.05)
+    });
     const backCover = new THREE.Mesh(backCoverGeom, backCoverMat);
     backCover.position.set(W / 2, -thick * 0.46, 0);
     backCover.receiveShadow = true;
@@ -376,14 +447,18 @@
 
     const coverFrontMat = new THREE.MeshStandardMaterial({
       map: coverTex,
-      roughness: 0.95,
-      metalness: 0.0,
+      roughness: 0.92,
+      metalness: 0.02,
+      normalMap: paperNorm,
+      normalScale: new THREE.Vector2(0.022, 0.022),
       side: THREE.FrontSide
     });
     const coverBackMat = new THREE.MeshStandardMaterial({
       map: p1Tex,
-      roughness: 0.95,
+      roughness: 0.96,
       metalness: 0.0,
+      normalMap: paperNorm,
+      normalScale: paperNormScale,
       side: THREE.BackSide
     });
 
@@ -415,7 +490,13 @@
     lpos.needsUpdate = true;
     leftGeom.computeVertexNormals();
 
-    const leftPageMat = new THREE.MeshStandardMaterial({ map: p1Tex, roughness: 0.98, metalness: 0.0 });
+    const leftPageMat = new THREE.MeshStandardMaterial({
+      map: p1Tex,
+      roughness: 0.98,
+      metalness: 0.0,
+      normalMap: paperNorm,
+      normalScale: paperNormScale
+    });
     const leftPageMesh = new THREE.Mesh(leftGeom, leftPageMat);
     leftPageMesh.rotation.x = -Math.PI / 2;
     leftPageMesh.position.set(0, 0.006, 0);
@@ -436,7 +517,13 @@
     rpos.needsUpdate = true;
     rightGeom.computeVertexNormals();
 
-    const rightPageMat = new THREE.MeshStandardMaterial({ map: p2Tex, roughness: 0.98, metalness: 0.0 });
+    const rightPageMat = new THREE.MeshStandardMaterial({
+      map: p2Tex,
+      roughness: 0.98,
+      metalness: 0.0,
+      normalMap: paperNorm,
+      normalScale: paperNormScale
+    });
     const rightPageMesh = new THREE.Mesh(rightGeom, rightPageMat);
     rightPageMesh.rotation.x = -Math.PI / 2;
     rightPageMesh.position.set(0, 0.006, 0);
@@ -445,22 +532,26 @@
     app.bookGroup.add(rightPageMesh);
     app.rightPageMesh = rightPageMesh;
 
-    // Bóng đổ khe gáy sách mềm mại (Gutter Crease Shadow / Ambient Occlusion)
+    // Bóng đổ khe gáy sách mềm mại đa tầng (Gutter Crease Multi-Stop Ambient Occlusion)
     const creaseCanvas = document.createElement('canvas');
-    creaseCanvas.width = 128; creaseCanvas.height = 16;
+    creaseCanvas.width = 256; creaseCanvas.height = 16;
     const cg = creaseCanvas.getContext('2d');
-    const cgrad = cg.createLinearGradient(0, 0, 128, 0);
-    cgrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    cgrad.addColorStop(0.38, 'rgba(15, 23, 42, 0.08)');
-    cgrad.addColorStop(0.50, 'rgba(15, 23, 42, 0.32)');
-    cgrad.addColorStop(0.62, 'rgba(15, 23, 42, 0.08)');
-    cgrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    const cgrad = cg.createLinearGradient(0, 0, 256, 0);
+    cgrad.addColorStop(0.00, 'rgba(0, 0, 0, 0)');
+    cgrad.addColorStop(0.20, 'rgba(12, 18, 28, 0.02)');
+    cgrad.addColorStop(0.35, 'rgba(12, 18, 28, 0.12)');
+    cgrad.addColorStop(0.45, 'rgba(8, 14, 22, 0.35)');
+    cgrad.addColorStop(0.50, 'rgba(2, 6, 14, 0.65)');
+    cgrad.addColorStop(0.55, 'rgba(8, 14, 22, 0.35)');
+    cgrad.addColorStop(0.65, 'rgba(12, 18, 28, 0.12)');
+    cgrad.addColorStop(0.80, 'rgba(12, 18, 28, 0.02)');
+    cgrad.addColorStop(1.00, 'rgba(0, 0, 0, 0)');
     cg.fillStyle = cgrad;
-    cg.fillRect(0, 0, 128, 16);
+    cg.fillRect(0, 0, 256, 16);
 
     const creaseTex = new THREE.CanvasTexture(creaseCanvas);
     creaseTex.encoding = THREE.sRGBEncoding;
-    const creaseGeom = new THREE.PlaneGeometry(0.14, H - 0.02);
+    const creaseGeom = new THREE.PlaneGeometry(0.18, H - 0.02);
     const creaseMat = new THREE.MeshBasicMaterial({
       map: creaseTex,
       transparent: true,
@@ -486,6 +577,8 @@
       map: p2Tex,
       roughness: 0.98,
       metalness: 0.0,
+      normalMap: paperNorm,
+      normalScale: paperNormScale,
       side: THREE.FrontSide
     });
     const frontMesh = new THREE.Mesh(sheetGeom, frontMat);
@@ -507,6 +600,8 @@
       map: p3Tex,
       roughness: 0.98,
       metalness: 0.0,
+      normalMap: paperNorm,
+      normalScale: paperNormScale,
       side: THREE.BackSide
     });
     const backMesh = new THREE.Mesh(backGeom, backMat);
@@ -577,8 +672,10 @@
         // Độ xoắn uốn chéo góc tự nhiên (torsional twist)
         const twistArch = (s_bottom - 0.35) * 0.22 * Math.pow(u, 1.5) * curlIntensity * env_eff;
         const cushion = Math.pow(u, 2) * (0.45 - q_eff) * 0.30 * curlIntensity * env_eff;
+        // Độ lượn sóng khí động học nhẹ nhàng khi lướt trong không khí (aerodynamic flutter)
+        const flutter = Math.sin(Math.PI * 2.0 * u + q_eff * Math.PI) * 0.04 * Math.pow(u, 1.8) * env_eff * curlIntensity;
 
-        const phi = baseAngle + arch + lead + twistArch + cushion;
+        const phi = baseAngle + arch + lead + twistArch + cushion + flutter;
         const c = Math.cos(phi);
         const s = Math.sin(phi);
 
@@ -739,6 +836,14 @@
     if (app.cover) {
       app.cover.rotation.z = coverAngle;
       app.cover.visible = true; // Luôn luôn hiển thị liên tục, KHÔNG BAO GIỜ bị ẩn/hiện giật lag
+    }
+
+    // Spine flex kinematics: Gáy sách nở và uốn ra phía sau khi mở sách
+    if (app.spine) {
+      const thick = app.bookThick;
+      app.spine.position.y = -thick * 0.20 - 0.014 * coverFactor;
+      app.spine.scale.x = 1.0 + 0.08 * coverFactor;
+      app.spine.scale.z = 1.0 + 0.05 * coverFactor;
     }
 
     // Uốn cong bìa và trang sách mềm mại theo độ mở
