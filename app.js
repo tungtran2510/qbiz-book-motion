@@ -56,8 +56,8 @@
     return h0 * Math.sin(Math.PI * Math.pow(u, 0.65)) * Math.cos(0.5 * Math.PI * u);
   };
 
-  // Cấu hình lưới đa giác mật độ cao (High-Subdivision SOTA 96x16) & Mép giấy 3D kín kín viền
-  const SUBDIV_X = 96;
+  // Cấu hình lưới đa giác siêu mịn (High-Subdivision SOTA 128x16) & Mép giấy 3D kín viền
+  const SUBDIV_X = 128;
   const SUBDIV_Y = 16;
   const boundaryIndices = [];
   for (let ix = 0; ix <= SUBDIV_X; ix++) boundaryIndices.push({ ix, iy: 0 });
@@ -748,7 +748,8 @@
     const ds = W / cols;
 
     const env_eff = Math.sin(Math.PI * q);
-    const spineAngle = Math.PI * (3 * q * q - 2 * q * q * q);
+    // Vận tốc góc xoay gáy sách mượt tuyệt đối theo đa thức bậc 7 (Không double-easing)
+    const spineAngle = Math.PI * q;
     const paperThick = 0.0014; // Độ dày thực tế của trang giấy sách mỹ thuật (1.4mm)
     const halfThick = paperThick * 0.5;
 
@@ -773,15 +774,20 @@
       const restAngle0 = Math.atan(restSlope0);
       const restAngle1 = Math.PI - restAngle0;
 
+      // Góc cơ sở xoay đều từ restAngle0 sang restAngle1
       const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
 
       // Vòm uốn cong tròn đầy đặn (Curvier, rounder arch), hoàn toàn song song không nghiêng lệch
-      const arch = Math.sin(Math.PI * Math.pow(u, 0.9)) * 0.72 * curlIntensity * env_eff;
-      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.35 * curlIntensity * env_eff;
-      const cushion = Math.pow(u, 1.8) * (0.50 - q) * 0.20 * curlIntensity * env_eff;
+      const arch = Math.sin(Math.PI * Math.pow(u, 0.85)) * 0.72 * curlIntensity * env_eff;
+      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.32 * curlIntensity * env_eff;
+
+      // Đệm khí nén khi tiếp đất (Air cushion glide in last 30% of flip)
+      const cushionWeight = (q > 0.65) ? Math.sin(Math.PI * clamp((q - 0.65) / 0.35, 0, 1)) : 0;
+      const cushion = cushionWeight * Math.pow(u, 1.5) * 0.16 * curlIntensity;
+
       // Điểm uốn chữ S mềm mại lơ lửng giữa không trung (Organic S-bend inflection when airborne)
-      const inflectWeight = Math.sin(Math.PI * clamp((q - 0.30) / 0.50, 0, 1));
-      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.08 * inflectWeight * curlIntensity;
+      const inflectWeight = Math.sin(Math.PI * clamp((q - 0.28) / 0.52, 0, 1));
+      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.06 * inflectWeight * curlIntensity;
 
       const phi = baseAngle + arch + roll + cushion + sInflect;
       const c = Math.cos(phi);
@@ -792,11 +798,12 @@
       prevX = newX;
       prevZ = newZ;
 
-      const takeOffFactor = smooth7(clamp((0.25 - q) / 0.25, 0, 1));
+      // Thu hẹp vùng hòa trộn đầu mút xuống 10% để 80% chu trình là cung tích phân thuần túy
+      const takeOffFactor = smooth7(clamp((0.10 - q) / 0.10, 0, 1));
       const finalX0 = (1 - takeOffFactor) * newX + takeOffFactor * (u * W);
       const finalZ0 = (1 - takeOffFactor) * newZ + takeOffFactor * restZ0;
 
-      const landFactor = smooth7(clamp((q - 0.70) / 0.30, 0, 1));
+      const landFactor = smooth7(clamp((q - 0.90) / 0.10, 0, 1));
       midX[ix] = (1 - landFactor) * finalX0 + landFactor * (-u * W);
       midZ[ix] = ((1 - landFactor) * finalZ0 + landFactor * restZ0) + q * 0.002;
 
@@ -838,7 +845,7 @@
   }
 
   // UỐN CONG BÌA ĐỘNG TỰ NHIÊN KHI MỞ VÀ GẤP LẠI (FLEXIBLE COVER CURVATURE WITH 3D HARDCOVER RIM)
-  function updateCoverDeformation(factor, isClosing = false) {
+  function updateCoverDeformation(factor, isClosing = false, flipQ = 0) {
     if (!app.coverFrontMesh || !app.coverBackMesh) return;
     const geomF = app.coverFrontMesh.geometry;
     const geomB = app.coverBackMesh.geometry;
@@ -852,6 +859,11 @@
     const halfThick = coverThick * 0.5;
     const W = app.bookWidth - 0.01;
 
+    // Đệm khí tiếp đất nhẹ nhàng: khi tờ giấy hạ cánh (flipQ > 0.70), cánh bìa/tệp trái lún vi mô 1.2mm
+    const cushionDepression = (flipQ > 0.70 && flipQ < 0.98)
+      ? Math.sin(Math.PI * clamp((flipQ - 0.70) / 0.28, 0, 1)) * 0.0012
+      : 0;
+
     const midZ = new Float32Array(cols + 1);
     const normX = new Float32Array(cols + 1);
     const normZ = new Float32Array(cols + 1);
@@ -860,7 +872,7 @@
       const u = ix / cols;
       let zVal;
       if (!isClosing) {
-        zVal = -factor * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
+        zVal = -factor * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u) - cushionDepression * Math.pow(u, 1.5);
       } else {
         zVal = -(1 - factor) * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
       }
@@ -869,7 +881,7 @@
       const uNext = Math.min(1, u + 0.015);
       let zNext;
       if (!isClosing) {
-        zNext = -factor * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext);
+        zNext = -factor * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext) - cushionDepression * Math.pow(uNext, 1.5);
       } else {
         zNext = -(1 - factor) * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext);
       }
@@ -1030,19 +1042,20 @@
     const q = smooth7(rawQ);
     const activeQ = isFlipping ? q : 0;
 
-    // Spine flex kinematics: Gáy sách nở và uốn ra phía sau khi mở sách
+    // Spine flex kinematics: Gáy sách nở và uốn ra phía sau khi mở sách kết hợp vi uốn khi lật
     if (app.spine) {
       const thick = app.bookThick;
-      app.spine.position.y = -thick * 0.20 - 0.014 * coverFactor;
+      const flipSpineFlex = isFlipping ? Math.sin(Math.PI * q) * 0.002 : 0;
+      app.spine.position.y = -thick * 0.20 - 0.014 * coverFactor - flipSpineFlex;
       app.spine.scale.x = 1.0 + 0.08 * coverFactor;
       app.spine.scale.z = 1.0 + 0.05 * coverFactor;
     }
 
-    // Uốn cong bìa và trang sách mềm mại theo độ mở kết hợp lực hút khí động học trang kế tiếp
+    // Uốn cong bìa và trang sách mềm mại theo độ mở kết hợp lực hút khí động học và đệm khí tiếp đất
     if (t < 8.4) {
-      updateCoverDeformation(openProg, false);
+      updateCoverDeformation(openProg, false, activeQ);
     } else {
-      updateCoverDeformation(closeProg, true);
+      updateCoverDeformation(closeProg, true, 0);
     }
     updateRightPageDeformation(coverFactor, activeQ);
 
@@ -1289,7 +1302,7 @@
                    app.ratio === '4:5'  ? [1080, 1350] : [1080, 1080];
 
     const duration = app.duration; // 10.0 giây
-    const fps = 30;
+    const fps = 30; // 30 FPS chuẩn xuất video điện ảnh
     const totalFrames = duration * fps; // 300 frames
     const oldTime = app.time;
 
@@ -1399,16 +1412,16 @@
           error: e => { console.error('VideoEncoder error:', e); encodeError = e; }
         });
 
-        // H.264 High Profile Level 4.0
+        // H.264 High Profile Level 4.0 chuẩn quốc tế
         encoder.configure({
           codec: 'avc1.640028',
           width: w,
           height: h,
-          bitrate: 14000000,
+          bitrate: 16000000,
           framerate: fps
         });
 
-        console.log('[EXPORT_LOG] Encoding 300 video frames...');
+        console.log(`[EXPORT_LOG] Encoding ${totalFrames} video frames (30 FPS)...`);
         for (let f = 0; f < totalFrames; f++) {
           if (encodeError) throw encodeError;
 
@@ -1431,7 +1444,7 @@
           }
 
           // Nhường nhịp nhỏ cho UI
-          if (f % 6 === 0) await new Promise(r => setTimeout(r, 4));
+          if (f % 15 === 0) await new Promise(r => setTimeout(r, 0));
         }
 
         console.log('[EXPORT_LOG] Finalizing muxer...');
