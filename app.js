@@ -18,9 +18,11 @@
     cover: null,
     coverFrontMesh: null,
     coverBackMesh: null,
+    coverRimMesh: null,
     activeSheet: null,
     activeFrontMesh: null,
     activeBackMesh: null,
+    activeRimMesh: null,
     leftPageMesh: null,
     rightPageMesh: null,
     leftStack: null,
@@ -48,6 +50,30 @@
     u = clamp(u, 0, 1);
     return h0 * Math.sin(Math.PI * Math.pow(u, 0.65)) * Math.cos(0.5 * Math.PI * u);
   };
+
+  // Cấu hình lưới đa giác mật độ cao (High-Subdivision SOTA 96x16) & Mép giấy 3D kín kín viền
+  const SUBDIV_X = 96;
+  const SUBDIV_Y = 16;
+  const boundaryIndices = [];
+  for (let ix = 0; ix <= SUBDIV_X; ix++) boundaryIndices.push({ ix, iy: 0 });
+  for (let iy = 1; iy <= SUBDIV_Y; iy++) boundaryIndices.push({ ix: SUBDIV_X, iy });
+  for (let ix = SUBDIV_X - 1; ix >= 0; ix--) boundaryIndices.push({ ix, iy: SUBDIV_Y });
+
+  function createRimGeometry() {
+    const numPts = boundaryIndices.length;
+    const rimPos = new Float32Array(numPts * 2 * 3);
+    const rimIndices = [];
+    for (let i = 0; i < numPts - 1; i++) {
+      const f0 = i * 2, b0 = i * 2 + 1;
+      const f1 = (i + 1) * 2, b1 = (i + 1) * 2 + 1;
+      rimIndices.push(f0, b0, f1);
+      rimIndices.push(b0, b1, f1);
+    }
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(rimPos, 3));
+    geom.setIndex(rimIndices);
+    return geom;
+  }
 
   function init3D() {
     if (!window.THREE) return;
@@ -429,9 +455,21 @@
 
     app.pageTextures.push(coverTex, p1Tex, p2Tex, p3Tex, p4Tex);
 
-    const cols = 48, rows = 12;
+    const cols = SUBDIV_X, rows = SUBDIV_Y;
 
-    // Bìa trước xoay chuyển động (Dual-Sided Cover Pivot)
+    // Cấu hình vật liệu Giấy Mỹ Thuật PBR chuẩn điện ảnh (MeshPhysicalMaterial with SSS Translucency & Sheen)
+    const paperPhysicalBase = {
+      roughness: 0.92,
+      metalness: 0.0,
+      clearcoat: 0.04,
+      clearcoatRoughness: 0.85,
+      reflectivity: 0.45,
+      sheen: new THREE.Color(0xfbf7ee),
+      normalMap: paperNorm,
+      normalScale: paperNormScale
+    };
+
+    // Bìa trước xoay chuyển động (Dual-Sided Cover Pivot with 3D Fore-Edge Hardcover Rim)
     const coverPivot = new THREE.Group();
     coverPivot.position.set(0, 0.007, 0);
     app.bookGroup.add(coverPivot);
@@ -445,20 +483,16 @@
     }
     bUv.needsUpdate = true;
 
-    const coverFrontMat = new THREE.MeshStandardMaterial({
+    const coverFrontMat = new THREE.MeshPhysicalMaterial({
       map: coverTex,
-      roughness: 0.92,
-      metalness: 0.02,
-      normalMap: paperNorm,
-      normalScale: new THREE.Vector2(0.022, 0.022),
+      ...paperPhysicalBase,
+      roughness: 0.88,
+      clearcoat: 0.08,
       side: THREE.FrontSide
     });
-    const coverBackMat = new THREE.MeshStandardMaterial({
+    const coverBackMat = new THREE.MeshPhysicalMaterial({
       map: p1Tex,
-      roughness: 0.96,
-      metalness: 0.0,
-      normalMap: paperNorm,
-      normalScale: paperNormScale,
+      ...paperPhysicalBase,
       side: THREE.BackSide
     });
 
@@ -472,11 +506,27 @@
     coverBackMesh.castShadow = true;
     coverBackMesh.receiveShadow = true;
 
+    const coverRimGeom = createRimGeometry();
+    const coverRimMat = new THREE.MeshStandardMaterial({
+      color: 0x182230,
+      roughness: 0.65,
+      metalness: 0.05,
+      normalMap: paperNorm,
+      normalScale: new THREE.Vector2(0.04, 0.04),
+      side: THREE.DoubleSide
+    });
+    const coverRimMesh = new THREE.Mesh(coverRimGeom, coverRimMat);
+    coverRimMesh.rotation.x = -Math.PI / 2;
+    coverRimMesh.castShadow = true;
+    coverRimMesh.receiveShadow = true;
+
     coverPivot.add(coverFrontMesh);
     coverPivot.add(coverBackMesh);
+    coverPivot.add(coverRimMesh);
     app.cover = coverPivot;
     app.coverFrontMesh = coverFrontMesh;
     app.coverBackMesh = coverBackMesh;
+    app.coverRimMesh = coverRimMesh;
 
     // Mặt trang tĩnh bên trái (Dự phòng ngầm, để ẩn để bìa động app.cover làm chủ hoàn toàn)
     const leftGeom = new THREE.PlaneGeometry(W - 0.01, H - 0.02, cols, rows);
@@ -490,12 +540,9 @@
     lpos.needsUpdate = true;
     leftGeom.computeVertexNormals();
 
-    const leftPageMat = new THREE.MeshStandardMaterial({
+    const leftPageMat = new THREE.MeshPhysicalMaterial({
       map: p1Tex,
-      roughness: 0.98,
-      metalness: 0.0,
-      normalMap: paperNorm,
-      normalScale: paperNormScale
+      ...paperPhysicalBase
     });
     const leftPageMesh = new THREE.Mesh(leftGeom, leftPageMat);
     leftPageMesh.rotation.x = -Math.PI / 2;
@@ -517,12 +564,9 @@
     rpos.needsUpdate = true;
     rightGeom.computeVertexNormals();
 
-    const rightPageMat = new THREE.MeshStandardMaterial({
+    const rightPageMat = new THREE.MeshPhysicalMaterial({
       map: p2Tex,
-      roughness: 0.98,
-      metalness: 0.0,
-      normalMap: paperNorm,
-      normalScale: paperNormScale
+      ...paperPhysicalBase
     });
     const rightPageMesh = new THREE.Mesh(rightGeom, rightPageMat);
     rightPageMesh.rotation.x = -Math.PI / 2;
@@ -565,20 +609,18 @@
     app.bookGroup.add(creaseMesh);
     app.creaseMesh = creaseMesh;
 
-    // TỜ RUỘT LẬT ĐỘNG (Active Flipping Sheet) - 48 CỘT UỐN CONG BẢO TOÀN CHIỀU DÀI
+    // TỜ RUỘT LẬT ĐỘNG (Active Flipping Sheet) - 96 CỘT UỐN CONG BẢO TOÀN CHIỀU DÀI & MÉP GIẤY 3D FORE-EDGE
     const sheetGeom = new THREE.PlaneGeometry(W - 0.01, H - 0.02, cols, rows);
     sheetGeom.translate((W - 0.01) / 2, 0, 0);
 
     const pos = sheetGeom.attributes.position;
     sheetGeom.userData.basePos = Float32Array.from(pos.array);
 
-    // Mặt trước (Recto - Trang 2): GPU hardware FrontSide culling
-    const frontMat = new THREE.MeshStandardMaterial({
+    // Mặt trước (Recto - Trang 2): Physical SSS Translucency
+    const frontMat = new THREE.MeshPhysicalMaterial({
       map: p2Tex,
-      roughness: 0.98,
-      metalness: 0.0,
-      normalMap: paperNorm,
-      normalScale: paperNormScale,
+      ...paperPhysicalBase,
+      transmission: 0.08, // Subsurface scattering / paper translucency
       side: THREE.FrontSide
     });
     const frontMesh = new THREE.Mesh(sheetGeom, frontMat);
@@ -587,7 +629,7 @@
     frontMesh.castShadow = true;
     frontMesh.receiveShadow = true;
 
-    // Mặt sau (Verso - Trang 3): GPU hardware BackSide culling
+    // Mặt sau (Verso - Trang 3): Physical SSS Translucency
     const backGeom = sheetGeom.clone();
     backGeom.userData.basePos = Float32Array.from(sheetGeom.userData.basePos);
     const uv = backGeom.attributes.uv;
@@ -596,12 +638,10 @@
     }
     uv.needsUpdate = true;
 
-    const backMat = new THREE.MeshStandardMaterial({
+    const backMat = new THREE.MeshPhysicalMaterial({
       map: p3Tex,
-      roughness: 0.98,
-      metalness: 0.0,
-      normalMap: paperNorm,
-      normalScale: paperNormScale,
+      ...paperPhysicalBase,
+      transmission: 0.08, // Subsurface scattering / paper translucency
       side: THREE.BackSide
     });
     const backMesh = new THREE.Mesh(backGeom, backMat);
@@ -610,115 +650,210 @@
     backMesh.castShadow = true;
     backMesh.receiveShadow = true;
 
+    // Mép cắt giấy 3D (Physical 3D Fore-Edge Paper Rim)
+    const activeRimGeom = createRimGeometry();
+    const activeRimMat = new THREE.MeshStandardMaterial({
+      color: 0xf4f1e8,
+      roughness: 0.96,
+      metalness: 0.0,
+      normalMap: paperNorm,
+      normalScale: new THREE.Vector2(0.03, 0.03),
+      side: THREE.DoubleSide
+    });
+    const activeRimMesh = new THREE.Mesh(activeRimGeom, activeRimMat);
+    activeRimMesh.rotation.x = -Math.PI / 2;
+    activeRimMesh.position.y = 0.0095;
+    activeRimMesh.castShadow = true;
+    activeRimMesh.receiveShadow = true;
+
     const sheetGroup = new THREE.Group();
     sheetGroup.add(frontMesh);
     sheetGroup.add(backMesh);
+    sheetGroup.add(activeRimMesh);
     sheetGroup.visible = false;
     app.bookGroup.add(sheetGroup);
 
     app.activeSheet = sheetGroup;
     app.activeFrontMesh = frontMesh;
     app.activeBackMesh = backMesh;
+    app.activeRimMesh = activeRimMesh;
 
     applyTime(app.time);
     app.dirty = true;
   }
 
   // THUẬT TOÁN UỐN CONG CUNG TRÒN SONG SONG ĐẦM CHẮC, CONG MƯỢT (PARALLEL CYLINDRICAL DEVELOPABLE SURFACE)
-  // TRIỆT TIÊU HOÀN TOÀN ĐỘ LỆCH CHÉO (ZERO TWIST) VÀ SÓNG RUNG (ZERO FLUTTER) - THẲNG THỚM, ĐẦM CHẮC, CONG ĐẦY ĐẶN
-  function deformSheet(mesh, progress, curlIntensity = 1.0) {
+  // ĐỒNG THỜI ĐỒNG BỘ MẶT TRƯỚC (RECTO), MẶT SAU (VERSO) VÀ MÉP CẮT GIẤY 3D FORE-EDGE VỚI ĐỘ DÀY THẬT
+  function deformSheet(frontMesh, backMesh, rimMesh, progress, curlIntensity = 1.0) {
+    if (!frontMesh || !backMesh) return;
     const q = clamp(progress, 0, 1);
-    const geom = mesh.geometry;
-    const pos = geom.attributes.position;
+    const geomF = frontMesh.geometry;
+    const geomB = backMesh.geometry;
+    const geomR = rimMesh ? rimMesh.geometry : null;
+    const posF = geomF.attributes.position;
+    const posB = geomB.attributes.position;
+    const posR = geomR ? geomR.attributes.position : null;
+
     const W = app.bookWidth - 0.01;
-    const cols = 48;
-    const rows = 12;
+    const cols = SUBDIV_X;
+    const rows = SUBDIV_Y;
     const ds = W / cols;
 
     const env_eff = Math.sin(Math.PI * q);
     const spineAngle = Math.PI * (3 * q * q - 2 * q * q * q);
+    const paperThick = 0.0014; // Độ dày thực tế của trang giấy sách mỹ thuật (1.4mm)
+    const halfThick = paperThick * 0.5;
 
-    for (let iy = 0; iy <= rows; iy++) {
-      let prevX = 0;
-      let prevZ = 0;
+    const midX = new Float32Array(cols + 1);
+    const midZ = new Float32Array(cols + 1);
+    const normX = new Float32Array(cols + 1);
+    const normZ = new Float32Array(cols + 1);
 
-      for (let ix = 0; ix <= cols; ix++) {
-        const vertexIdx = iy * (cols + 1) + ix;
-        const y0 = pos.getY(vertexIdx);
-
-        if (ix === 0) {
-          pos.setXYZ(vertexIdx, 0, y0, q * 0.003);
-          prevX = 0;
-          prevZ = 0;
-          continue;
-        }
-
-        const u = ix / cols;
-        const restZ0 = restingZ(u);
-        const restSlope0 = (restingZ(Math.min(1, u + 0.02)) - restZ0) / (0.02 * W);
-        const restAngle0 = Math.atan(restSlope0);
-        const restAngle1 = Math.PI - restAngle0;
-
-        const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
-
-        // Vòm uốn cong tròn đầy đặn (Curvier, rounder arch), hoàn toàn song song không nghiêng lệch
-        const arch = Math.sin(Math.PI * Math.pow(u, 0.9)) * 0.70 * curlIntensity * env_eff;
-        const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.35 * curlIntensity * env_eff;
-        const cushion = Math.pow(u, 1.8) * (0.50 - q) * 0.20 * curlIntensity * env_eff;
-
-        const phi = baseAngle + arch + roll + cushion;
-        const c = Math.cos(phi);
-        const s = Math.sin(phi);
-
-        const newX = prevX + ds * c;
-        const newZ = Math.max(0, prevZ + ds * s);
-
-        prevX = newX;
-        prevZ = newZ;
-
-        const takeOffFactor = smootherstep(clamp((0.25 - q) / 0.25, 0, 1));
-        const finalX0 = (1 - takeOffFactor) * newX + takeOffFactor * (u * W);
-        const finalZ0 = (1 - takeOffFactor) * newZ + takeOffFactor * restZ0;
-
-        const landFactor = smootherstep(clamp((q - 0.70) / 0.30, 0, 1));
-        const finalX = (1 - landFactor) * finalX0 + landFactor * (-u * W);
-        const finalZ = (1 - landFactor) * finalZ0 + landFactor * restZ0;
-
-        pos.setXYZ(vertexIdx, finalX, y0, finalZ + q * 0.002);
+    let prevX = 0, prevZ = 0;
+    for (let ix = 0; ix <= cols; ix++) {
+      if (ix === 0) {
+        midX[0] = 0;
+        midZ[0] = q * 0.003;
+        normX[0] = -Math.sin(spineAngle);
+        normZ[0] = Math.cos(spineAngle);
+        continue;
       }
+
+      const u = ix / cols;
+      const restZ0 = restingZ(u);
+      const restSlope0 = (restingZ(Math.min(1, u + 0.02)) - restZ0) / (0.02 * W);
+      const restAngle0 = Math.atan(restSlope0);
+      const restAngle1 = Math.PI - restAngle0;
+
+      const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
+
+      // Vòm uốn cong tròn đầy đặn (Curvier, rounder arch), hoàn toàn song song không nghiêng lệch
+      const arch = Math.sin(Math.PI * Math.pow(u, 0.9)) * 0.70 * curlIntensity * env_eff;
+      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.35 * curlIntensity * env_eff;
+      const cushion = Math.pow(u, 1.8) * (0.50 - q) * 0.20 * curlIntensity * env_eff;
+
+      const phi = baseAngle + arch + roll + cushion;
+      const c = Math.cos(phi);
+      const s = Math.sin(phi);
+
+      const newX = prevX + ds * c;
+      const newZ = Math.max(0, prevZ + ds * s);
+      prevX = newX;
+      prevZ = newZ;
+
+      const takeOffFactor = smootherstep(clamp((0.25 - q) / 0.25, 0, 1));
+      const finalX0 = (1 - takeOffFactor) * newX + takeOffFactor * (u * W);
+      const finalZ0 = (1 - takeOffFactor) * newZ + takeOffFactor * restZ0;
+
+      const landFactor = smootherstep(clamp((q - 0.70) / 0.30, 0, 1));
+      midX[ix] = (1 - landFactor) * finalX0 + landFactor * (-u * W);
+      midZ[ix] = ((1 - landFactor) * finalZ0 + landFactor * restZ0) + q * 0.002;
+
+      normX[ix] = -s;
+      normZ[ix] = c;
     }
-
-    pos.needsUpdate = true;
-    geom.computeVertexNormals();
-  }
-
-  // UỐN CONG BÌA ĐỘNG TỰ NHIÊN KHI MỞ VÀ GẤP LẠI (FLEXIBLE COVER CURVATURE)
-  function updateCoverDeformation(factor, isClosing = false) {
-    if (!app.coverFrontMesh || !app.coverBackMesh) return;
-    const geomF = app.coverFrontMesh.geometry;
-    const geomB = app.coverBackMesh.geometry;
-    const posF = geomF.attributes.position;
-    const posB = geomB.attributes.position;
-    const cols = 48, rows = 12;
-    const flex = Math.sin(Math.PI * factor);
 
     for (let iy = 0; iy <= rows; iy++) {
       for (let ix = 0; ix <= cols; ix++) {
         const idx = iy * (cols + 1) + ix;
-        const u = ix / cols;
-        let zVal;
-        if (!isClosing) {
-          // Mở bìa: factor đi từ 0 -> 1. Khi mở hoàn toàn (factor=1), zVal = -restingZ(u)
-          // Xoay quanh trục Z 180 độ sẽ làm -restingZ(u) hướng lên trên (+Y thế giới) trùng khớp tuyệt đối độ cong trang
-          zVal = -factor * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
-        } else {
-          // Đóng bìa: factor đi từ 0 -> 1 (0 là mở hoàn toàn, 1 là gập phẳng hoàn toàn)
-          zVal = -(1 - factor) * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
-        }
-        posF.setZ(idx, zVal);
-        posB.setZ(idx, zVal);
+        const y0 = posF.getY(idx);
+
+        const mx = midX[ix];
+        const mz = midZ[ix];
+        const nx = normX[ix];
+        const nz = normZ[ix];
+
+        posF.setXYZ(idx, mx + halfThick * nx, y0, mz + halfThick * nz);
+        posB.setXYZ(idx, mx - halfThick * nx, y0, mz - halfThick * nz);
       }
     }
+
+    if (posR) {
+      const numPts = boundaryIndices.length;
+      for (let k = 0; k < numPts; k++) {
+        const { ix, iy } = boundaryIndices[k];
+        const idx = iy * (cols + 1) + ix;
+        posR.setXYZ(k * 2, posF.getX(idx), posF.getY(idx), posF.getZ(idx));
+        posR.setXYZ(k * 2 + 1, posB.getX(idx), posB.getY(idx), posB.getZ(idx));
+      }
+      posR.needsUpdate = true;
+      geomR.computeVertexNormals();
+    }
+
+    posF.needsUpdate = true;
+    posB.needsUpdate = true;
+    geomF.computeVertexNormals();
+    geomB.computeVertexNormals();
+  }
+
+  // UỐN CONG BÌA ĐỘNG TỰ NHIÊN KHI MỞ VÀ GẤP LẠI (FLEXIBLE COVER CURVATURE WITH 3D HARDCOVER RIM)
+  function updateCoverDeformation(factor, isClosing = false) {
+    if (!app.coverFrontMesh || !app.coverBackMesh) return;
+    const geomF = app.coverFrontMesh.geometry;
+    const geomB = app.coverBackMesh.geometry;
+    const geomR = app.coverRimMesh ? app.coverRimMesh.geometry : null;
+    const posF = geomF.attributes.position;
+    const posB = geomB.attributes.position;
+    const posR = geomR ? geomR.attributes.position : null;
+    const cols = SUBDIV_X, rows = SUBDIV_Y;
+    const flex = Math.sin(Math.PI * factor);
+    const coverThick = 0.0022; // Độ dày bìa cứng carton 2.2mm
+    const halfThick = coverThick * 0.5;
+    const W = app.bookWidth - 0.01;
+
+    const midZ = new Float32Array(cols + 1);
+    const normX = new Float32Array(cols + 1);
+    const normZ = new Float32Array(cols + 1);
+
+    for (let ix = 0; ix <= cols; ix++) {
+      const u = ix / cols;
+      let zVal;
+      if (!isClosing) {
+        zVal = -factor * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
+      } else {
+        zVal = -(1 - factor) * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
+      }
+      midZ[ix] = zVal;
+
+      const uNext = Math.min(1, u + 0.015);
+      let zNext;
+      if (!isClosing) {
+        zNext = -factor * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext);
+      } else {
+        zNext = -(1 - factor) * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext);
+      }
+      const slope = (zNext - zVal) / (0.015 * W);
+      const angle = Math.atan(slope);
+      normX[ix] = -Math.sin(angle);
+      normZ[ix] = Math.cos(angle);
+    }
+
+    for (let iy = 0; iy <= rows; iy++) {
+      for (let ix = 0; ix <= cols; ix++) {
+        const idx = iy * (cols + 1) + ix;
+        const y0 = posF.getY(idx);
+        const mz = midZ[ix];
+        const nx = normX[ix];
+        const nz = normZ[ix];
+
+        const baseX = (ix / cols) * W;
+        posF.setXYZ(idx, baseX + halfThick * nx, y0, mz + halfThick * nz);
+        posB.setXYZ(idx, baseX - halfThick * nx, y0, mz - halfThick * nz);
+      }
+    }
+
+    if (posR) {
+      const numPts = boundaryIndices.length;
+      for (let k = 0; k < numPts; k++) {
+        const { ix, iy } = boundaryIndices[k];
+        const idx = iy * (cols + 1) + ix;
+        posR.setXYZ(k * 2, posF.getX(idx), posF.getY(idx), posF.getZ(idx));
+        posR.setXYZ(k * 2 + 1, posB.getX(idx), posB.getY(idx), posB.getZ(idx));
+      }
+      posR.needsUpdate = true;
+      geomR.computeVertexNormals();
+    }
+
     posF.needsUpdate = true;
     posB.needsUpdate = true;
     geomF.computeVertexNormals();
@@ -730,7 +865,7 @@
     if (!app.rightPageMesh) return;
     const geom = app.rightPageMesh.geometry;
     const pos = geom.attributes.position;
-    const cols = 48, rows = 12;
+    const cols = SUBDIV_X, rows = SUBDIV_Y;
 
     for (let iy = 0; iy <= rows; iy++) {
       for (let ix = 0; ix <= cols; ix++) {
@@ -915,8 +1050,8 @@
         app.activeSheet.visible = true;
         app.activeFrontMesh.visible = true;
         app.activeBackMesh.visible = true;
-        deformSheet(app.activeFrontMesh, q, app.curlAmount);
-        deformSheet(app.activeBackMesh, q, app.curlAmount);
+        if (app.activeRimMesh) app.activeRimMesh.visible = true;
+        deformSheet(app.activeFrontMesh, app.activeBackMesh, app.activeRimMesh, q, app.curlAmount);
       }
     } else {
       // t >= 8.4s: Giai đoạn đóng bìa lại
