@@ -45,6 +45,11 @@
   const smooth = x => { x = clamp(x); return x * x * (3 - 2 * x); };
   const ease = x => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
   const smootherstep = x => { x = clamp(x, 0, 1); return x * x * x * (x * (x * 6 - 15) + 10); };
+  // Hàm chuyển động mượt bậc 7 (7th Order Smoothstep - Triệt tiêu gia tốc giật 0 Jerk)
+  const smooth7 = x => {
+    x = clamp(x, 0, 1);
+    return x * x * x * x * (x * (x * (-20 * x + 70) - 84) + 35);
+  };
   const h0 = 0.054; // Độ võng cong tự nhiên của trang giấy sách (tăng độ cong trang trọng)
   const restingZ = u => {
     u = clamp(u, 0, 1);
@@ -73,6 +78,36 @@
     geom.setAttribute('position', new THREE.BufferAttribute(rimPos, 3));
     geom.setIndex(rimIndices);
     return geom;
+  }
+
+  // TẠO BẢN ĐỒ VÂN XẾP LỚP HÀNG TRĂM TRANG GIẤY TRÊN TỆP SÁCH (PROCEDURAL STACKED PAGE EDGE TEXTURE)
+  function getStackEdgeTexture() {
+    if (app.stackEdgeTexture) return app.stackEdgeTexture;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(128, 256);
+    const data = imgData.data;
+    for (let y = 0; y < 256; y++) {
+      const pageLine = (y % 2 === 0);
+      const noise = (Math.sin(y * 18.2) * 0.5 + 0.5) * 8 + (Math.sin(y * 4.1) * 0.5 + 0.5) * 6;
+      const base = pageLine ? 245 : 230;
+      const col = Math.floor(base - noise);
+      for (let x = 0; x < 128; x++) {
+        const idx = (y * 128 + x) * 4;
+        data[idx] = col;
+        data[idx + 1] = col - 2;
+        data[idx + 2] = col - 5;
+        data[idx + 3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(8, 2);
+    app.stackEdgeTexture = tex;
+    return tex;
   }
 
   function init3D() {
@@ -118,7 +153,14 @@
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     key.shadow.bias = -0.0004;
-    key.shadow.radius = 2.0;
+    key.shadow.radius = 2.4;
+    key.shadow.camera.left = -2.2;
+    key.shadow.camera.right = 2.2;
+    key.shadow.camera.top = 2.0;
+    key.shadow.camera.bottom = -2.0;
+    key.shadow.camera.near = 1.0;
+    key.shadow.camera.far = 12.0;
+    key.shadow.camera.updateProjectionMatrix();
     scene.add(key);
 
     const fill = new THREE.DirectionalLight(0xffffff, 0.10);
@@ -386,10 +428,29 @@
     const W = app.bookWidth;
     const thick = 0.05 + (app.thickness / 1000) * 1.6;
 
-    // Khối ruột sách tĩnh bên phải (Right Stack)
+    // Khối ruột sách tĩnh bên phải (Right Stack) - Giả lập vân xếp lớp hàng trăm trang giấy
     const rightStackGeom = new THREE.BoxGeometry(W, thick * 0.45, H);
-    const paperEdgeMat = new THREE.MeshStandardMaterial({ color: 0xedebe4, roughness: 0.88 });
-    const rightStackMesh = new THREE.Mesh(rightStackGeom, paperEdgeMat);
+    const stackEdgeTex = getStackEdgeTexture();
+    const paperEdgeMat = new THREE.MeshStandardMaterial({
+      map: stackEdgeTex,
+      roughness: 0.90,
+      metalness: 0.0
+    });
+    const paperTopMat = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.98,
+      metalness: 0.0
+    });
+    const stackMaterials = [
+      paperEdgeMat, // +X (fore-edge)
+      paperEdgeMat, // -X (spine)
+      paperTopMat,  // +Y (top page)
+      paperTopMat,  // -Y (bottom)
+      paperEdgeMat, // +Z (bottom edge)
+      paperEdgeMat  // -Z (top edge)
+    ];
+
+    const rightStackMesh = new THREE.Mesh(rightStackGeom, stackMaterials);
     rightStackMesh.position.set(W / 2, -thick * 0.22, 0);
     rightStackMesh.castShadow = true;
     rightStackMesh.receiveShadow = true;
@@ -398,7 +459,7 @@
 
     // Khối ruột sách tĩnh bên trái (Left Stack)
     const leftStackGeom = new THREE.BoxGeometry(W, thick * 0.45, H);
-    const leftStackMesh = new THREE.Mesh(leftStackGeom, paperEdgeMat);
+    const leftStackMesh = new THREE.Mesh(leftStackGeom, stackMaterials);
     leftStackMesh.position.set(-W / 2, -thick * 0.22, 0);
     leftStackMesh.castShadow = true;
     leftStackMesh.receiveShadow = true;
@@ -715,11 +776,14 @@
       const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
 
       // Vòm uốn cong tròn đầy đặn (Curvier, rounder arch), hoàn toàn song song không nghiêng lệch
-      const arch = Math.sin(Math.PI * Math.pow(u, 0.9)) * 0.70 * curlIntensity * env_eff;
+      const arch = Math.sin(Math.PI * Math.pow(u, 0.9)) * 0.72 * curlIntensity * env_eff;
       const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.35 * curlIntensity * env_eff;
       const cushion = Math.pow(u, 1.8) * (0.50 - q) * 0.20 * curlIntensity * env_eff;
+      // Điểm uốn chữ S mềm mại lơ lửng giữa không trung (Organic S-bend inflection when airborne)
+      const inflectWeight = Math.sin(Math.PI * clamp((q - 0.30) / 0.50, 0, 1));
+      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.08 * inflectWeight * curlIntensity;
 
-      const phi = baseAngle + arch + roll + cushion;
+      const phi = baseAngle + arch + roll + cushion + sInflect;
       const c = Math.cos(phi);
       const s = Math.sin(phi);
 
@@ -728,11 +792,11 @@
       prevX = newX;
       prevZ = newZ;
 
-      const takeOffFactor = smootherstep(clamp((0.25 - q) / 0.25, 0, 1));
+      const takeOffFactor = smooth7(clamp((0.25 - q) / 0.25, 0, 1));
       const finalX0 = (1 - takeOffFactor) * newX + takeOffFactor * (u * W);
       const finalZ0 = (1 - takeOffFactor) * newZ + takeOffFactor * restZ0;
 
-      const landFactor = smootherstep(clamp((q - 0.70) / 0.30, 0, 1));
+      const landFactor = smooth7(clamp((q - 0.70) / 0.30, 0, 1));
       midX[ix] = (1 - landFactor) * finalX0 + landFactor * (-u * W);
       midZ[ix] = ((1 - landFactor) * finalZ0 + landFactor * restZ0) + q * 0.002;
 
@@ -847,18 +911,25 @@
     geomB.computeVertexNormals();
   }
 
-  // UỐN THẢ LỎNG TRANG BÊN PHẢI (RIGHT PAGE BULGE RELAXATION) - ĐẦM CHẮC, ÊM ÁI
-  function updateRightPageDeformation(factor) {
+  // UỐN THẢ LỎNG VÀ HÚT KHÍ ĐỘNG HỌC TRANG KẾ TIẾP (RIGHT PAGE SLIPSTREAM DYNAMICS)
+  function updateRightPageDeformation(factor, flipQ = 0) {
     if (!app.rightPageMesh) return;
     const geom = app.rightPageMesh.geometry;
     const pos = geom.attributes.position;
     const cols = SUBDIV_X, rows = SUBDIV_Y;
 
+    // Lực hút khí động học kéo nhẹ mép trang bên dưới khi trang trên nhấc lên (0.02 -> 0.50)
+    const suctionEnv = (flipQ > 0.02 && flipQ < 0.50)
+      ? Math.sin(Math.PI * clamp((flipQ - 0.02) / 0.48, 0, 1))
+      : 0;
+
     for (let iy = 0; iy <= rows; iy++) {
       for (let ix = 0; ix <= cols; ix++) {
         const idx = iy * (cols + 1) + ix;
         const u = ix / cols;
-        pos.setZ(idx, factor * restingZ(u));
+        const baseZ = factor * restingZ(u);
+        const slipstreamZ = suctionEnv * 0.0022 * Math.pow(u, 1.8);
+        pos.setZ(idx, baseZ + slipstreamZ);
       }
     }
     pos.needsUpdate = true;
@@ -935,12 +1006,12 @@
     const t = clamp(time, 0, 10);
     const W = app.bookWidth;
 
-    // 1. Mở bìa trước (0.8s -> 2.2s) & Đóng bìa (8.4s -> 9.8s) với Perlin Smootherstep
+    // 1. Mở bìa trước (0.8s -> 2.2s) & Đóng bìa (8.4s -> 9.8s) với Smoothstep bậc 7 (Triệt tiêu 0 Jerk)
     const rawOpen = clamp((t - 0.8) / 1.4, 0, 1);
-    const openProg = rawOpen * rawOpen * rawOpen * (rawOpen * (rawOpen * 6 - 15) + 10);
+    const openProg = smooth7(rawOpen);
 
     const rawClose = clamp((t - 8.4) / 1.4, 0, 1);
-    const closeProg = rawClose * rawClose * rawClose * (rawClose * (rawClose * 6 - 15) + 10);
+    const closeProg = smooth7(rawClose);
 
     const coverFactor = clamp(openProg * (1 - closeProg), 0, 1);
 
@@ -951,12 +1022,12 @@
       app.cover.visible = true; // Luôn luôn hiển thị liên tục, KHÔNG BAO GIỜ bị ẩn/hiện giật lag
     }
 
-    // 2. Lật trang (4.2s -> 5.6s) với Perlin Smootherstep
+    // 2. Lật trang (4.2s -> 5.6s) với Smoothstep bậc 7 (Triệt tiêu 0 Jerk)
     const flipStart = 4.2;
     const flipDuration = 1.4;
     const isFlipping = t >= flipStart && t <= flipStart + flipDuration;
     const rawQ = clamp((t - flipStart) / flipDuration, 0, 1);
-    const q = rawQ * rawQ * rawQ * (rawQ * (rawQ * 6 - 15) + 10);
+    const q = smooth7(rawQ);
     const activeQ = isFlipping ? q : 0;
 
     // Spine flex kinematics: Gáy sách nở và uốn ra phía sau khi mở sách
@@ -973,7 +1044,7 @@
     } else {
       updateCoverDeformation(closeProg, true);
     }
-    updateRightPageDeformation(coverFactor);
+    updateRightPageDeformation(coverFactor, activeQ);
 
     if (app.rightPageMesh) {
       app.rightPageMesh.visible = true;
