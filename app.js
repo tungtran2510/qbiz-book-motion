@@ -90,8 +90,8 @@
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.04;
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.0;
     host.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -109,24 +109,24 @@
     app.scene3D = scene;
     app.camera3D = camera;
 
-    // Ánh sáng Studio Điện ảnh (Dual-Temperature 3-Point Lighting & ACES Filmic)
-    const hemi = new THREE.HemisphereLight(0xfffaf0, 0xd8e0ea, 0.58);
+    // Ánh sáng Studio chuẩn xác (Tổng cường độ ~1.0 giữ nguyên 100% màu gốc của PDF, không bị cháy sáng hay đổi màu)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xd0d4dc, 0.66);
     scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xfffbf2, 0.42);
+    const key = new THREE.DirectionalLight(0xffffff, 0.34);
     key.position.set(-2.0, 5.5, 3.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
-    key.shadow.bias = -0.0003;
-    key.shadow.radius = 2.2;
+    key.shadow.bias = -0.0004;
+    key.shadow.radius = 2.0;
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0xe8f0fe, 0.14);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.10);
     fill.position.set(3.0, 3.5, 2.5);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight(0xffffff, 0.12);
-    rim.position.set(1.8, 4.2, -3.2);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.08);
+    rim.position.set(2.0, 4.0, -3.0);
     scene.add(rim);
 
     // Mặt sàn Studio Sweep
@@ -457,18 +457,6 @@
 
     const cols = SUBDIV_X, rows = SUBDIV_Y;
 
-    // Cấu hình vật liệu Giấy Mỹ Thuật PBR chuẩn điện ảnh (MeshPhysicalMaterial with SSS Translucency & Sheen)
-    const paperPhysicalBase = {
-      roughness: 0.92,
-      metalness: 0.0,
-      clearcoat: 0.04,
-      clearcoatRoughness: 0.85,
-      reflectivity: 0.45,
-      sheen: new THREE.Color(0xfbf7ee),
-      normalMap: paperNorm,
-      normalScale: paperNormScale
-    };
-
     // Bìa trước xoay chuyển động (Dual-Sided Cover Pivot with 3D Fore-Edge Hardcover Rim)
     const coverPivot = new THREE.Group();
     coverPivot.position.set(0, 0.007, 0);
@@ -483,16 +471,17 @@
     }
     bUv.needsUpdate = true;
 
-    const coverFrontMat = new THREE.MeshPhysicalMaterial({
+    // Giữ nguyên 100% màu gốc tài liệu PDF/ảnh (Không ám vàng, không đổi màu)
+    const coverFrontMat = new THREE.MeshStandardMaterial({
       map: coverTex,
-      ...paperPhysicalBase,
-      roughness: 0.88,
-      clearcoat: 0.08,
+      roughness: 0.92,
+      metalness: 0.0,
       side: THREE.FrontSide
     });
-    const coverBackMat = new THREE.MeshPhysicalMaterial({
+    const coverBackMat = new THREE.MeshStandardMaterial({
       map: p1Tex,
-      ...paperPhysicalBase,
+      roughness: 0.96,
+      metalness: 0.0,
       side: THREE.BackSide
     });
 
@@ -511,8 +500,6 @@
       color: 0x182230,
       roughness: 0.65,
       metalness: 0.05,
-      normalMap: paperNorm,
-      normalScale: new THREE.Vector2(0.04, 0.04),
       side: THREE.DoubleSide
     });
     const coverRimMesh = new THREE.Mesh(coverRimGeom, coverRimMat);
@@ -540,9 +527,10 @@
     lpos.needsUpdate = true;
     leftGeom.computeVertexNormals();
 
-    const leftPageMat = new THREE.MeshPhysicalMaterial({
+    const leftPageMat = new THREE.MeshStandardMaterial({
       map: p1Tex,
-      ...paperPhysicalBase
+      roughness: 0.98,
+      metalness: 0.0
     });
     const leftPageMesh = new THREE.Mesh(leftGeom, leftPageMat);
     leftPageMesh.rotation.x = -Math.PI / 2;
@@ -564,9 +552,10 @@
     rpos.needsUpdate = true;
     rightGeom.computeVertexNormals();
 
-    const rightPageMat = new THREE.MeshPhysicalMaterial({
+    const rightPageMat = new THREE.MeshStandardMaterial({
       map: p2Tex,
-      ...paperPhysicalBase
+      roughness: 0.98,
+      metalness: 0.0
     });
     const rightPageMesh = new THREE.Mesh(rightGeom, rightPageMat);
     rightPageMesh.rotation.x = -Math.PI / 2;
@@ -616,11 +605,11 @@
     const pos = sheetGeom.attributes.position;
     sheetGeom.userData.basePos = Float32Array.from(pos.array);
 
-    // Mặt trước (Recto - Trang 2): Physical SSS Translucency
-    const frontMat = new THREE.MeshPhysicalMaterial({
+    // Mặt trước (Recto - Trang 2): 100% màu gốc chuẩn xác
+    const frontMat = new THREE.MeshStandardMaterial({
       map: p2Tex,
-      ...paperPhysicalBase,
-      transmission: 0.08, // Subsurface scattering / paper translucency
+      roughness: 0.98,
+      metalness: 0.0,
       side: THREE.FrontSide
     });
     const frontMesh = new THREE.Mesh(sheetGeom, frontMat);
@@ -629,7 +618,7 @@
     frontMesh.castShadow = true;
     frontMesh.receiveShadow = true;
 
-    // Mặt sau (Verso - Trang 3): Physical SSS Translucency
+    // Mặt sau (Verso - Trang 3): 100% màu gốc chuẩn xác
     const backGeom = sheetGeom.clone();
     backGeom.userData.basePos = Float32Array.from(sheetGeom.userData.basePos);
     const uv = backGeom.attributes.uv;
@@ -638,10 +627,10 @@
     }
     uv.needsUpdate = true;
 
-    const backMat = new THREE.MeshPhysicalMaterial({
+    const backMat = new THREE.MeshStandardMaterial({
       map: p3Tex,
-      ...paperPhysicalBase,
-      transmission: 0.08, // Subsurface scattering / paper translucency
+      roughness: 0.98,
+      metalness: 0.0,
       side: THREE.BackSide
     });
     const backMesh = new THREE.Mesh(backGeom, backMat);
@@ -650,14 +639,12 @@
     backMesh.castShadow = true;
     backMesh.receiveShadow = true;
 
-    // Mép cắt giấy 3D (Physical 3D Fore-Edge Paper Rim)
+    // Mép cắt giấy 3D (Physical 3D Fore-Edge Paper Rim - Trắng ngà tự nhiên)
     const activeRimGeom = createRimGeometry();
     const activeRimMat = new THREE.MeshStandardMaterial({
-      color: 0xf4f1e8,
+      color: 0xffffff,
       roughness: 0.96,
       metalness: 0.0,
-      normalMap: paperNorm,
-      normalScale: new THREE.Vector2(0.03, 0.03),
       side: THREE.DoubleSide
     });
     const activeRimMesh = new THREE.Mesh(activeRimGeom, activeRimMat);
