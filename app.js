@@ -777,17 +777,17 @@
       // Góc cơ sở xoay đều từ restAngle0 sang restAngle1
       const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
 
-      // Vòm uốn cong tròn đầy đặn (Curvier, rounder arch), hoàn toàn song song không nghiêng lệch
-      const arch = Math.sin(Math.PI * Math.pow(u, 0.85)) * 0.72 * curlIntensity * env_eff;
-      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.32 * curlIntensity * env_eff;
+      // Vòm uốn cong tròn đầy đặn, cao và cong hơn đúng như ảnh mẫu thiết kế
+      const arch = Math.sin(Math.PI * Math.pow(u, 0.80)) * 0.92 * curlIntensity * env_eff;
+      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.42 * curlIntensity * env_eff;
 
       // Đệm khí nén khi tiếp đất (Air cushion glide in last 30% of flip)
       const cushionWeight = (q > 0.65) ? Math.sin(Math.PI * clamp((q - 0.65) / 0.35, 0, 1)) : 0;
-      const cushion = cushionWeight * Math.pow(u, 1.5) * 0.16 * curlIntensity;
+      const cushion = cushionWeight * Math.pow(u, 1.5) * 0.20 * curlIntensity;
 
       // Điểm uốn chữ S mềm mại lơ lửng giữa không trung (Organic S-bend inflection when airborne)
       const inflectWeight = Math.sin(Math.PI * clamp((q - 0.28) / 0.52, 0, 1));
-      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.06 * inflectWeight * curlIntensity;
+      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.09 * inflectWeight * curlIntensity;
 
       const phi = baseAngle + arch + roll + cushion + sInflect;
       const c = Math.cos(phi);
@@ -872,23 +872,41 @@
       const u = ix / cols;
       let zVal;
       if (!isClosing) {
-        zVal = -factor * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u) - cushionDepression * Math.pow(u, 1.5);
+        // Độ uốn cong bìa mở mềm mại, cong rõ rệt như panel 3 "3. Mở bìa" trong ảnh mẫu
+        const openCurl = flex * (0.075 * Math.sin(Math.PI * Math.pow(u, 0.75)) + 0.095 * Math.pow(u, 1.5));
+        zVal = -factor * restingZ(u) - openCurl - cushionDepression * Math.pow(u, 1.5);
       } else {
-        zVal = -(1 - factor) * restingZ(u) - 0.020 * flex * Math.sin(Math.PI * u);
+        const closeCurl = flex * (0.055 * Math.sin(Math.PI * Math.pow(u, 0.75)) + 0.075 * Math.pow(u, 1.5));
+        zVal = -(1 - factor) * restingZ(u) + closeCurl;
       }
       midZ[ix] = zVal;
 
       const uNext = Math.min(1, u + 0.015);
       let zNext;
       if (!isClosing) {
-        zNext = -factor * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext) - cushionDepression * Math.pow(uNext, 1.5);
+        const openCurlNext = flex * (0.075 * Math.sin(Math.PI * Math.pow(uNext, 0.75)) + 0.095 * Math.pow(uNext, 1.5));
+        zNext = -factor * restingZ(uNext) - openCurlNext - cushionDepression * Math.pow(uNext, 1.5);
       } else {
-        zNext = -(1 - factor) * restingZ(uNext) - 0.020 * flex * Math.sin(Math.PI * uNext);
+        const closeCurlNext = flex * (0.055 * Math.sin(Math.PI * Math.pow(uNext, 0.75)) + 0.075 * Math.pow(uNext, 1.5));
+        zNext = -(1 - factor) * restingZ(uNext) + closeCurlNext;
       }
       const slope = (zNext - zVal) / (0.015 * W);
       const angle = Math.atan(slope);
       normX[ix] = -Math.sin(angle);
       normZ[ix] = Math.cos(angle);
+    }
+
+    const ds = W / cols;
+    const midX = new Float32Array(cols + 1);
+    let prevX = 0;
+    for (let ix = 0; ix <= cols; ix++) {
+      if (ix === 0) {
+        midX[0] = 0;
+      } else {
+        const c = normZ[ix];
+        prevX += ds * c;
+        midX[ix] = prevX;
+      }
     }
 
     for (let iy = 0; iy <= rows; iy++) {
@@ -898,10 +916,10 @@
         const mz = midZ[ix];
         const nx = normX[ix];
         const nz = normZ[ix];
+        const mx = midX[ix];
 
-        const baseX = (ix / cols) * W;
-        posF.setXYZ(idx, baseX + halfThick * nx, y0, mz + halfThick * nz);
-        posB.setXYZ(idx, baseX - halfThick * nx, y0, mz - halfThick * nz);
+        posF.setXYZ(idx, mx + halfThick * nx, y0, mz + halfThick * nz);
+        posB.setXYZ(idx, mx - halfThick * nx, y0, mz - halfThick * nz);
       }
     }
 
