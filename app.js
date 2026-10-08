@@ -64,8 +64,8 @@
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.LinearToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.04;
     host.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -83,24 +83,24 @@
     app.scene3D = scene;
     app.camera3D = camera;
 
-    // Ánh sáng Studio chuẩn xác (Tổng cường độ ~1.0 giữ nguyên 100% màu gốc của PDF, không bị cháy sáng)
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xd0d4dc, 0.66);
+    // Ánh sáng Studio Điện ảnh (Dual-Temperature 3-Point Lighting & ACES Filmic)
+    const hemi = new THREE.HemisphereLight(0xfffaf0, 0xd8e0ea, 0.58);
     scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xffffff, 0.34);
+    const key = new THREE.DirectionalLight(0xfffbf2, 0.42);
     key.position.set(-2.0, 5.5, 3.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
-    key.shadow.bias = -0.0004;
-    key.shadow.radius = 2.0;
+    key.shadow.bias = -0.0003;
+    key.shadow.radius = 2.2;
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0xffffff, 0.10);
+    const fill = new THREE.DirectionalLight(0xe8f0fe, 0.14);
     fill.position.set(3.0, 3.5, 2.5);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight(0xffffff, 0.08);
-    rim.position.set(2.0, 4.0, -3.0);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.12);
+    rim.position.set(1.8, 4.2, -3.2);
     scene.add(rim);
 
     // Mặt sàn Studio Sweep
@@ -734,78 +734,90 @@
     geomB.computeVertexNormals();
   }
 
-  // UỐN THẢ LỎNG TRANG BÊN PHẢI (RIGHT PAGE BULGE RELAXATION)
-  function updateRightPageDeformation(factor) {
+  // UỐN THẢ LỎNG VÀ HÚT KHÍ ĐỘNG HỌC TRANG KẾ TIẾP (RIGHT PAGE SLIPSTREAM DYNAMICS)
+  function updateRightPageDeformation(factor, flipQ = 0) {
     if (!app.rightPageMesh) return;
     const geom = app.rightPageMesh.geometry;
     const pos = geom.attributes.position;
     const cols = 48, rows = 12;
+
+    // Lực hút khí động học kéo nhẹ mép trang bên dưới khi trang trên nhấc lên (0.02 -> 0.55)
+    const suctionEnv = (flipQ > 0.02 && flipQ < 0.55)
+      ? Math.sin(Math.PI * clamp((flipQ - 0.02) / 0.53, 0, 1))
+      : 0;
+
     for (let iy = 0; iy <= rows; iy++) {
       for (let ix = 0; ix <= cols; ix++) {
         const idx = iy * (cols + 1) + ix;
         const u = ix / cols;
-        pos.setZ(idx, factor * restingZ(u));
+        const baseZ = factor * restingZ(u);
+        const slipstreamZ = suctionEnv * 0.0028 * Math.pow(u, 1.8);
+        pos.setZ(idx, baseZ + slipstreamZ);
       }
     }
     pos.needsUpdate = true;
     geom.computeVertexNormals();
   }
 
-  // ĐỊNH VỊ CAMERA CHUẨN ĐIỆN ẢNH VÀ ỔN ĐỊNH TUYỆT ĐỐI (STEADY CINEMATIC FRAMING)
-  // ĐỊNH VỊ CAMERA CHUẨN ĐIỆN ẢNH VÀ ỔN ĐỊNH TUYỆT ĐỐI (STEADY CINEMATIC FRAMING)
-  function updateCameraFraming(aspectRatio, coverOpenFactor = 1.0) {
+  // ĐỊNH VỊ CAMERA CHUẨN ĐIỆN ẢNH VÀ CHUYỂN ĐỘNG THỞ SỐNG ĐỘNG (CINEMATIC CAMERA BREATHING & DOLLY)
+  function updateCameraFraming(aspectRatio, coverOpenFactor = 1.0, flipQ = 0.0) {
     const aspect = aspectRatio || app.camera3D.aspect || (16 / 9);
     const W = app.bookWidth;
     const targetX = (W / 2) * (1 - coverOpenFactor);
     const targetY = 0;
     const targetZ = 0.02;
 
+    // Chuyển động thở điện ảnh: Zoom push-in 3.5% khi mở sách để tập trung vào nội dung
+    const dollyFactor = 1.0 - 0.035 * coverOpenFactor;
+    // Micro-parallax drift nhẹ nhàng đồng nhịp khi lật trang
+    const flipParallax = Math.sin(Math.PI * flipQ) * 0.032;
+
     let dist, camX, camY, camZ;
 
     if (aspect >= 1.5) {
       // 16:9 Landscape
-      dist = 3.65;
+      dist = 3.65 * dollyFactor;
       if (app.camera === 'reader') {
-        camX = targetX; camY = 2.65; camZ = 1.95;
+        camX = targetX + flipParallax; camY = 2.65 * dollyFactor; camZ = 1.95 * dollyFactor;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
         // Product 45°
-        camX = targetX + 0.52; camY = 2.25; camZ = 2.45;
+        camX = targetX + 0.52 * dollyFactor + flipParallax; camY = 2.25 * dollyFactor; camZ = 2.45 * dollyFactor;
       }
     } else if (aspect >= 1.2) {
       // 4:3 Standard
-      dist = 4.10;
+      dist = 4.10 * dollyFactor;
       if (app.camera === 'reader') {
-        camX = targetX; camY = 3.10; camZ = 2.30;
+        camX = targetX + flipParallax; camY = 3.10 * dollyFactor; camZ = 2.30 * dollyFactor;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
-        camX = targetX + 0.58; camY = 2.55; camZ = 2.85;
+        camX = targetX + 0.58 * dollyFactor + flipParallax; camY = 2.55 * dollyFactor; camZ = 2.85 * dollyFactor;
       }
     } else if (aspect >= 0.9) {
       // 1:1 Square
-      dist = 4.60;
+      dist = 4.60 * dollyFactor;
       if (app.camera === 'reader') {
-        camX = targetX; camY = 3.50; camZ = 2.60;
+        camX = targetX + flipParallax; camY = 3.50 * dollyFactor; camZ = 2.60 * dollyFactor;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
-        camX = targetX + 0.62; camY = 2.95; camZ = 3.25;
+        camX = targetX + 0.62 * dollyFactor + flipParallax; camY = 2.95 * dollyFactor; camZ = 3.25 * dollyFactor;
       }
     } else {
       // 9:16 Vertical
-      dist = 5.50;
+      dist = 5.50 * dollyFactor;
       if (app.camera === 'reader') {
-        camX = targetX; camY = 4.20; camZ = 3.20;
+        camX = targetX + flipParallax; camY = 4.20 * dollyFactor; camZ = 3.20 * dollyFactor;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
-        camX = targetX + 0.65; camY = 3.55; camZ = 3.90;
+        camX = targetX + 0.65 * dollyFactor + flipParallax; camY = 3.55 * dollyFactor; camZ = 3.90 * dollyFactor;
       }
     }
 
@@ -838,6 +850,14 @@
       app.cover.visible = true; // Luôn luôn hiển thị liên tục, KHÔNG BAO GIỜ bị ẩn/hiện giật lag
     }
 
+    // 2. Lật trang (4.2s -> 5.6s) với Perlin Smootherstep
+    const flipStart = 4.2;
+    const flipDuration = 1.4;
+    const isFlipping = t >= flipStart && t <= flipStart + flipDuration;
+    const rawQ = clamp((t - flipStart) / flipDuration, 0, 1);
+    const q = rawQ * rawQ * rawQ * (rawQ * (rawQ * 6 - 15) + 10);
+    const activeQ = isFlipping ? q : 0;
+
     // Spine flex kinematics: Gáy sách nở và uốn ra phía sau khi mở sách
     if (app.spine) {
       const thick = app.bookThick;
@@ -846,13 +866,13 @@
       app.spine.scale.z = 1.0 + 0.05 * coverFactor;
     }
 
-    // Uốn cong bìa và trang sách mềm mại theo độ mở
+    // Uốn cong bìa và trang sách mềm mại theo độ mở kết hợp lực hút khí động học trang kế tiếp
     if (t < 8.4) {
       updateCoverDeformation(openProg, false);
     } else {
       updateCoverDeformation(closeProg, true);
     }
-    updateRightPageDeformation(coverFactor);
+    updateRightPageDeformation(coverFactor, activeQ);
 
     if (app.rightPageMesh) {
       app.rightPageMesh.visible = true;
@@ -871,13 +891,6 @@
       app.contactShadow.scale.x = 0.55 + coverFactor * 0.52;
       app.contactShadow.position.x = (W / 2) * (1 - coverFactor);
     }
-
-    // 2. Lật trang (4.2s -> 5.6s) với Perlin Smootherstep
-    const flipStart = 4.2;
-    const flipDuration = 1.4;
-    const isFlipping = t >= flipStart && t <= flipStart + flipDuration;
-    const rawQ = clamp((t - flipStart) / flipDuration, 0, 1);
-    const q = rawQ * rawQ * rawQ * (rawQ * (rawQ * 6 - 15) + 10);
 
     if (t < flipStart) {
       // Spread 1 (Trang 1 bên trái & Trang 2 bên phải)
@@ -946,8 +959,8 @@
       }
     }
 
-    // 3. Steady Camera Framing
-    updateCameraFraming(customAspect, coverFactor);
+    // 3. Cinematic Camera Breathing & Dolly Parallax
+    updateCameraFraming(customAspect, coverFactor, activeQ);
 
     app.dirty = true;
   }
