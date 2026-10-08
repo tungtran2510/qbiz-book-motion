@@ -43,7 +43,7 @@
   const smooth = x => { x = clamp(x); return x * x * (3 - 2 * x); };
   const ease = x => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
   const smootherstep = x => { x = clamp(x, 0, 1); return x * x * x * (x * (x * 6 - 15) + 10); };
-  const h0 = 0.046; // Độ võng tự nhiên của trang giấy sách
+  const h0 = 0.054; // Độ võng cong tự nhiên của trang giấy sách (tăng độ cong trang trọng)
   const restingZ = u => {
     u = clamp(u, 0, 1);
     return h0 * Math.sin(Math.PI * Math.pow(u, 0.65)) * Math.cos(0.5 * Math.PI * u);
@@ -624,8 +624,8 @@
     app.dirty = true;
   }
 
-  // THUẬT TOÁN UỐN CONG BẢO TOÀN CHIỀU DÀI CUNG (INEXTENSIBLE DEVELOPABLE SURFACE)
-  // KẾT HỢP BEND + TWIST + CORNER PEEL TỰ NHIÊN (GÓC DƯỚI PHẢI NHẤC LÊN TRƯỚC)
+  // THUẬT TOÁN UỐN CONG CUNG TRÒN SONG SONG ĐẦM CHẮC, CONG MƯỢT (PARALLEL CYLINDRICAL DEVELOPABLE SURFACE)
+  // TRIỆT TIÊU HOÀN TOÀN ĐỘ LỆCH CHÉO (ZERO TWIST) VÀ SÓNG RUNG (ZERO FLUTTER) - THẲNG THỚM, ĐẦM CHẮC, CONG ĐẦY ĐẶN
   function deformSheet(mesh, progress, curlIntensity = 1.0) {
     const q = clamp(progress, 0, 1);
     const geom = mesh.geometry;
@@ -635,11 +635,10 @@
     const rows = 12;
     const ds = W / cols;
 
+    const env_eff = Math.sin(Math.PI * q);
+    const spineAngle = Math.PI * (3 * q * q - 2 * q * q * q);
+
     for (let iy = 0; iy <= rows; iy++) {
-      // iy = 0 là mép trên (+H/2), iy = rows là mép dưới (-H/2)
-      const s_bottom = iy / rows; // 0 = trên, 1 = dưới
-      // Góc dưới phải được tay người lật nhấc lên trước (lead phase)
-      const deltaQ = 0.12 * (s_bottom - 0.35) * 4 * q * (1 - q);
       let prevX = 0;
       let prevZ = 0;
 
@@ -655,27 +654,19 @@
         }
 
         const u = ix / cols;
-        // Điểm càng xa gáy sách (u -> 1) thì độ lệch góc lật càng rõ rệt
-        const q_eff = clamp(q + deltaQ * u, 0, 1);
-        const env_eff = Math.sin(Math.PI * q_eff);
-
         const restZ0 = restingZ(u);
         const restSlope0 = (restingZ(Math.min(1, u + 0.02)) - restZ0) / (0.02 * W);
         const restAngle0 = Math.atan(restSlope0);
         const restAngle1 = Math.PI - restAngle0;
 
-        const spineAngle = Math.PI * (3 * q_eff * q_eff - 2 * q_eff * q_eff * q_eff);
-        const baseAngle = (1 - env_eff) * ((1 - q_eff) * restAngle0 + q_eff * restAngle1) + env_eff * spineAngle;
+        const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
 
-        const arch = Math.sin(Math.PI * u) * 0.40 * curlIntensity * env_eff;
-        const lead = Math.pow(u, 1.3) * (1.0 - 0.85 * q_eff) * 0.65 * curlIntensity * env_eff;
-        // Độ xoắn uốn chéo góc tự nhiên (torsional twist)
-        const twistArch = (s_bottom - 0.35) * 0.22 * Math.pow(u, 1.5) * curlIntensity * env_eff;
-        const cushion = Math.pow(u, 2) * (0.45 - q_eff) * 0.30 * curlIntensity * env_eff;
-        // Độ lượn sóng khí động học nhẹ nhàng khi lướt trong không khí (aerodynamic flutter)
-        const flutter = Math.sin(Math.PI * 2.0 * u + q_eff * Math.PI) * 0.04 * Math.pow(u, 1.8) * env_eff * curlIntensity;
+        // Vòm uốn cong tròn đầy đặn (Curvier, rounder arch), hoàn toàn song song không nghiêng lệch
+        const arch = Math.sin(Math.PI * Math.pow(u, 0.9)) * 0.70 * curlIntensity * env_eff;
+        const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.35 * curlIntensity * env_eff;
+        const cushion = Math.pow(u, 1.8) * (0.50 - q) * 0.20 * curlIntensity * env_eff;
 
-        const phi = baseAngle + arch + lead + twistArch + cushion + flutter;
+        const phi = baseAngle + arch + roll + cushion;
         const c = Math.cos(phi);
         const s = Math.sin(phi);
 
@@ -685,11 +676,11 @@
         prevX = newX;
         prevZ = newZ;
 
-        const takeOffFactor = smootherstep(clamp((0.3 - q) / 0.3, 0, 1));
+        const takeOffFactor = smootherstep(clamp((0.25 - q) / 0.25, 0, 1));
         const finalX0 = (1 - takeOffFactor) * newX + takeOffFactor * (u * W);
         const finalZ0 = (1 - takeOffFactor) * newZ + takeOffFactor * restZ0;
 
-        const landFactor = smootherstep(clamp((q - 0.6) / 0.4, 0, 1));
+        const landFactor = smootherstep(clamp((q - 0.70) / 0.30, 0, 1));
         const finalX = (1 - landFactor) * finalX0 + landFactor * (-u * W);
         const finalZ = (1 - landFactor) * finalZ0 + landFactor * restZ0;
 
@@ -734,90 +725,78 @@
     geomB.computeVertexNormals();
   }
 
-  // UỐN THẢ LỎNG VÀ HÚT KHÍ ĐỘNG HỌC TRANG KẾ TIẾP (RIGHT PAGE SLIPSTREAM DYNAMICS)
-  function updateRightPageDeformation(factor, flipQ = 0) {
+  // UỐN THẢ LỎNG TRANG BÊN PHẢI (RIGHT PAGE BULGE RELAXATION) - ĐẦM CHẮC, ÊM ÁI
+  function updateRightPageDeformation(factor) {
     if (!app.rightPageMesh) return;
     const geom = app.rightPageMesh.geometry;
     const pos = geom.attributes.position;
     const cols = 48, rows = 12;
 
-    // Lực hút khí động học kéo nhẹ mép trang bên dưới khi trang trên nhấc lên (0.02 -> 0.55)
-    const suctionEnv = (flipQ > 0.02 && flipQ < 0.55)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.02) / 0.53, 0, 1))
-      : 0;
-
     for (let iy = 0; iy <= rows; iy++) {
       for (let ix = 0; ix <= cols; ix++) {
         const idx = iy * (cols + 1) + ix;
         const u = ix / cols;
-        const baseZ = factor * restingZ(u);
-        const slipstreamZ = suctionEnv * 0.0028 * Math.pow(u, 1.8);
-        pos.setZ(idx, baseZ + slipstreamZ);
+        pos.setZ(idx, factor * restingZ(u));
       }
     }
     pos.needsUpdate = true;
     geom.computeVertexNormals();
   }
 
-  // ĐỊNH VỊ CAMERA CHUẨN ĐIỆN ẢNH VÀ CHUYỂN ĐỘNG THỞ SỐNG ĐỘNG (CINEMATIC CAMERA BREATHING & DOLLY)
-  function updateCameraFraming(aspectRatio, coverOpenFactor = 1.0, flipQ = 0.0) {
+  // ĐỊNH VỊ CAMERA CHUẨN ĐIỆN ẢNH VÀ VỮNG CHÃI CỐ ĐỊNH (STEADY TRIPOD CINEMATIC FRAMING)
+  function updateCameraFraming(aspectRatio, coverOpenFactor = 1.0) {
     const aspect = aspectRatio || app.camera3D.aspect || (16 / 9);
     const W = app.bookWidth;
     const targetX = (W / 2) * (1 - coverOpenFactor);
     const targetY = 0;
     const targetZ = 0.02;
 
-    // Chuyển động thở điện ảnh: Zoom push-in 3.5% khi mở sách để tập trung vào nội dung
-    const dollyFactor = 1.0 - 0.035 * coverOpenFactor;
-    // Micro-parallax drift nhẹ nhàng đồng nhịp khi lật trang
-    const flipParallax = Math.sin(Math.PI * flipQ) * 0.032;
-
     let dist, camX, camY, camZ;
 
     if (aspect >= 1.5) {
       // 16:9 Landscape
-      dist = 3.65 * dollyFactor;
+      dist = 3.65;
       if (app.camera === 'reader') {
-        camX = targetX + flipParallax; camY = 2.65 * dollyFactor; camZ = 1.95 * dollyFactor;
+        camX = targetX; camY = 2.65; camZ = 1.95;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
         // Product 45°
-        camX = targetX + 0.52 * dollyFactor + flipParallax; camY = 2.25 * dollyFactor; camZ = 2.45 * dollyFactor;
+        camX = targetX + 0.52; camY = 2.25; camZ = 2.45;
       }
     } else if (aspect >= 1.2) {
       // 4:3 Standard
-      dist = 4.10 * dollyFactor;
+      dist = 4.10;
       if (app.camera === 'reader') {
-        camX = targetX + flipParallax; camY = 3.10 * dollyFactor; camZ = 2.30 * dollyFactor;
+        camX = targetX; camY = 3.10; camZ = 2.30;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
-        camX = targetX + 0.58 * dollyFactor + flipParallax; camY = 2.55 * dollyFactor; camZ = 2.85 * dollyFactor;
+        camX = targetX + 0.58; camY = 2.55; camZ = 2.85;
       }
     } else if (aspect >= 0.9) {
       // 1:1 Square
-      dist = 4.60 * dollyFactor;
+      dist = 4.60;
       if (app.camera === 'reader') {
-        camX = targetX + flipParallax; camY = 3.50 * dollyFactor; camZ = 2.60 * dollyFactor;
+        camX = targetX; camY = 3.50; camZ = 2.60;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
-        camX = targetX + 0.62 * dollyFactor + flipParallax; camY = 2.95 * dollyFactor; camZ = 3.25 * dollyFactor;
+        camX = targetX + 0.62; camY = 2.95; camZ = 3.25;
       }
     } else {
       // 9:16 Vertical
-      dist = 5.50 * dollyFactor;
+      dist = 5.50;
       if (app.camera === 'reader') {
-        camX = targetX + flipParallax; camY = 4.20 * dollyFactor; camZ = 3.20 * dollyFactor;
+        camX = targetX; camY = 4.20; camZ = 3.20;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + flipParallax * 0.5; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
+        camX = targetX; camY = dist * Math.sin(angleRad); camZ = dist * Math.cos(angleRad) + 0.02;
       } else {
-        camX = targetX + 0.65 * dollyFactor + flipParallax; camY = 3.55 * dollyFactor; camZ = 3.90 * dollyFactor;
+        camX = targetX + 0.65; camY = 3.55; camZ = 3.90;
       }
     }
 
@@ -872,7 +851,7 @@
     } else {
       updateCoverDeformation(closeProg, true);
     }
-    updateRightPageDeformation(coverFactor, activeQ);
+    updateRightPageDeformation(coverFactor);
 
     if (app.rightPageMesh) {
       app.rightPageMesh.visible = true;
@@ -959,8 +938,8 @@
       }
     }
 
-    // 3. Cinematic Camera Breathing & Dolly Parallax
-    updateCameraFraming(customAspect, coverFactor, activeQ);
+    // 3. Steady Studio Camera Framing (Cố định vững chắc trên tripod)
+    updateCameraFraming(customAspect, coverFactor);
 
     app.dirty = true;
   }
