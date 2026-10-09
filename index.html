@@ -14,7 +14,7 @@
   <meta property="og:description" content="Tạo video lật sách 3D điện ảnh từ PDF / ảnh, uốn cong giấy tự nhiên và xuất MP4 1080p.">
   <meta property="og:image" content="logo-square.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="styles.css?v=20261009-v5">
+  <link rel="stylesheet" href="styles.css?v=20261009-v6">
 </head>
 <body>
   <header class="topbar">
@@ -192,6 +192,21 @@
             <label class="slider-label">Độ cong trang khi lật <output id="curlAmountOut">100%</output></label>
             <input id="curlAmount" type="range" min="50" max="180" value="100">
           </details>
+
+          <div class="field-label second" style="margin-top:14px;">ĐOẠN TRANG LẬT TRONG SÁCH</div>
+          <div class="spread-row" id="spreadRow">
+            <button class="choice active" data-spread="0">Trang 2–3 ➔ 4–5</button>
+            <button class="choice" data-spread="1">Trang 4–5 ➔ 6–7</button>
+            <button class="choice" data-spread="2">Trang 6–7 ➔ 8–9</button>
+            <button class="choice" data-spread="3">Trang 8–9 ➔ 10–11</button>
+          </div>
+
+          <label class="audio-toggle" id="audioToggleLabel" title="Bật/Tắt âm thanh lật giấy">
+            <span style="font-size:10px;font-weight:600;color:#ccd7e5;display:flex;align-items:center;gap:6px;">
+              <span id="audioIcon">🔊</span> Âm thanh lật giấy ASMR
+            </span>
+            <input type="checkbox" id="audioToggle" checked style="accent-color:#3b82f6;width:15px;height:15px;cursor:pointer;">
+          </label>
         </section>
       </div>
 
@@ -205,6 +220,9 @@
         </div>
         <button class="export-button" id="exportButton" disabled>
           <span>▶</span> Xuất video MP4 1080p (H.264)
+        </button>
+        <button class="snapshot-button" id="btnSnapshot4K" disabled>
+          <span>📸</span> Chụp ảnh Mockup 4K Ultra HD (PNG)
         </button>
       </footer>
     </aside>
@@ -233,6 +251,6 @@
   <script src="OrbitControls.js"></script>
   <script src="mp4-muxer.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="app.js?v=20261009-motion-presets-v5"></script>
+  <script src="app.js?v=20261009-motion-presets-v6"></script>
 </body>
 </html>

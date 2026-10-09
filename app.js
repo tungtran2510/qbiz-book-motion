@@ -5,6 +5,9 @@
   const app = {
     pages: [],
     pageRatios: [],
+    allPages: [],
+    selectedSpread: 0,
+    audioEnabled: true,
     fileName: '',
     duration: 10,
     playing: false,
@@ -325,6 +328,7 @@
       }
     },
     play(name) {
+      if (!app.audioEnabled) return;
       if (!this.ctx || !this.buffers[name]) return;
       if (this.ctx.state === 'suspended') this.ctx.resume();
       const src = this.ctx.createBufferSource();
@@ -552,6 +556,10 @@
     app.backCover = backCover;
 
     // Chuẩn bị Textures cho các trang
+    app.allPages = pages;
+    app.selectedSpread = 0;
+    $$('[data-spread]').forEach((b, i) => b.classList.toggle('active', i === 0));
+
     const coverImg = app.coverMode && pages.length ? pages[0] : null;
     const page1Img = app.coverMode ? (pages.length > 1 ? pages[1] : null) : pages[0];
     const page2Img = app.coverMode ? (pages.length > 2 ? pages[2] : null) : pages[1];
@@ -1489,6 +1497,7 @@
       $('#stageHeading').textContent = app.fileName;
       $('#stageSub').textContent = `${images.length} trang · 3D Book Flip sẵn sàng · Lật trang uốn cong mượt mà`;
       $('#exportButton').disabled = false;
+      if ($('#btnSnapshot4K')) $('#btnSnapshot4K').disabled = false;
 
       applyTime(0);
       toast(`Đã tải ${images.length} trang sách thành công! Bấm ▶ để xem lật sách.`);
@@ -1501,6 +1510,139 @@
   function filesInput(files) {
     $('#fileMeta').textContent = 'Đang đọc tài liệu…';
     importFiles(files);
+  }
+
+  // BỘ CHỌN ĐOẠN TRANG LẬT (TẬN DỤNG TRỌN VẸN 11 TRANG TÀI LIỆU GỐC)
+  function setSpread(idx) {
+    if (!app.allPages || app.allPages.length < 3) return;
+    app.selectedSpread = idx;
+    const pages = app.allPages;
+
+    $$('[data-spread]').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.spread, 10) === idx);
+    });
+
+    const base = app.coverMode ? 1 : 0;
+    const p1Idx = base + idx * 2;
+    const p2Idx = base + idx * 2 + 1;
+    const p3Idx = base + idx * 2 + 2;
+    const p4Idx = base + idx * 2 + 3;
+
+    const img1 = p1Idx < pages.length ? pages[p1Idx] : null;
+    const img2 = p2Idx < pages.length ? pages[p2Idx] : null;
+    const img3 = p3Idx < pages.length ? pages[p3Idx] : null;
+    const img4 = p4Idx < pages.length ? pages[p4Idx] : null;
+
+    // Giữ nguyên 100% màu sắc nguyên bản của sách, không qua bộ lọc
+    const p1Tex = makeSinglePageTexture(img1, p1Idx + 1, `TRANG ${p1Idx + 1}`);
+    const p2Tex = makeSinglePageTexture(img2, p2Idx + 1, `TRANG ${p2Idx + 1}`);
+    const p3Tex = makeSinglePageTexture(img3, p3Idx + 1, `TRANG ${p3Idx + 1}`);
+    const p4Tex = makeSinglePageTexture(img4, p4Idx + 1, `TRANG ${p4Idx + 1}`);
+
+    for (let i = 1; i <= 4; i++) {
+      if (app.pageTextures[i]) app.pageTextures[i].dispose();
+    }
+
+    app.pageTextures[1] = p1Tex;
+    app.pageTextures[2] = p2Tex;
+    app.pageTextures[3] = p3Tex;
+    app.pageTextures[4] = p4Tex;
+
+    if (app.activeSheet) {
+      app.activeFrontMesh.material.map = p2Tex;
+      app.activeFrontMesh.material.needsUpdate = true;
+      app.activeBackMesh.material.map = p3Tex;
+      app.activeBackMesh.material.needsUpdate = true;
+    }
+    if (app.coverBackMesh) {
+      app.coverBackMesh.material.map = p1Tex;
+      app.coverBackMesh.material.needsUpdate = true;
+    }
+    if (app.rightPageMesh) {
+      app.rightPageMesh.material.map = p2Tex;
+      app.rightPageMesh.material.needsUpdate = true;
+    }
+
+    applyTime(app.time);
+    app.dirty = true;
+    const labelStart = `Trang ${p1Idx + 1}–${p2Idx + 1}`;
+    const labelEnd = p3Idx < pages.length ? `Trang ${p3Idx + 1}–${Math.min(pages.length, p4Idx + 1)}` : '';
+    toast(`Đã chọn đoạn lật: ${labelStart} ➔ ${labelEnd}`);
+  }
+
+  // CHỤP ẢNH MOCKUP 4K ULTRA HD (PNG ĐÚNG CHUẨN MÀU GỐC SÁCH)
+  async function takeSnapshot4K() {
+    if (!app.renderer || !app.scene3D || !app.camera3D) {
+      toast('Vui lòng đợi 3D khởi tạo hoàn tất.');
+      return;
+    }
+    if (!app.pages.length) {
+      toast('Vui lòng nạp PDF hoặc ảnh trước khi chụp.');
+      return;
+    }
+
+    const btn = $('#btnSnapshot4K');
+    const origHtml = btn.innerHTML;
+    btn.innerHTML = '<span>⚡</span> Đang kết xuất 4K…';
+    btn.disabled = true;
+
+    try {
+      let w4k = 3840, h4k = 2160;
+      if (app.ratio === '4:3') { w4k = 2880; h4k = 2160; }
+      else if (app.ratio === '9:16') { w4k = 2160; h4k = 3840; }
+      else if (app.ratio === '1:1') { w4k = 2560; h4k = 2560; }
+
+      const stageEl = $('#stage');
+      const origW = stageEl.clientWidth;
+      const origH = stageEl.clientHeight;
+      const origAspect = app.camera3D.aspect;
+      const origPixelRatio = app.renderer.getPixelRatio();
+
+      // Render ở độ phân giải 4K tối đa với độ sắc nét tuyệt đối
+      app.renderer.setPixelRatio(1);
+      app.renderer.setSize(w4k, h4k, false);
+      app.camera3D.aspect = w4k / h4k;
+      app.camera3D.updateProjectionMatrix();
+
+      app.renderer.render(app.scene3D, app.camera3D);
+
+      // Trích xuất blob PNG bảo toàn 100% màu gốc không nén
+      await new Promise(resolve => {
+        app.renderer.domElement.toBlob(blob => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const timeStr = app.time.toFixed(1).replace('.', 's');
+            a.download = `QBiz-Mockup-4K-${app.motionStyle}-${timeStr}.png`;
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              resolve();
+            }, 100);
+          } else {
+            resolve();
+          }
+        }, 'image/png');
+      });
+
+      // Khôi phục lại kích thước hiển thị ban đầu
+      app.renderer.setPixelRatio(origPixelRatio);
+      app.renderer.setSize(origW, origH, false);
+      app.camera3D.aspect = origAspect;
+      app.camera3D.updateProjectionMatrix();
+      app.renderer.render(app.scene3D, app.camera3D);
+
+      toast(`📸 Đã xuất ảnh Mockup 4K Ultra HD (${w4k}×${h4k}) thành công!`);
+    } catch (err) {
+      console.error('Snapshot 4K error:', err);
+      toast(`Lỗi chụp 4K: ${err.message}`);
+    } finally {
+      btn.innerHTML = origHtml;
+      btn.disabled = false;
+    }
   }
 
   // XUẤT VIDEO MP4 CHUẨN XÁC 10.00s (H.264 / 1080P ĐÚNG PIXEL 1:1)
@@ -1541,26 +1683,30 @@
         console.log('[EXPORT_LOG] Starting WebCodecs export...');
         button.innerHTML = '<span>⚡</span> Đang nạp âm thanh & chuẩn bị…';
 
-        // Tải và giải mã track âm thanh đồng bộ chuẩn xác 10s
+        // Tải và giải mã track âm thanh đồng bộ chuẩn xác 10s (chỉ khi bật âm thanh)
         let audioTrackConfig = null;
         let masterAudioBuffer = null;
-        try {
-          const aRes = await fetch('sound_master_10s.wav');
-          if (aRes.ok) {
-            const aBuf = await aRes.arrayBuffer();
-            const actx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
-            masterAudioBuffer = await actx.decodeAudioData(aBuf);
-            if (typeof AudioEncoder !== 'undefined') {
-              audioTrackConfig = {
-                codec: 'aac',
-                sampleRate: masterAudioBuffer.sampleRate,
-                numberOfChannels: masterAudioBuffer.numberOfChannels
-              };
-              console.log('[EXPORT_LOG] Audio track ready:', masterAudioBuffer.duration, 'sec');
+        if (app.audioEnabled) {
+          try {
+            const aRes = await fetch('sound_master_10s.wav');
+            if (aRes.ok) {
+              const aBuf = await aRes.arrayBuffer();
+              const actx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 44100);
+              masterAudioBuffer = await actx.decodeAudioData(aBuf);
+              if (typeof AudioEncoder !== 'undefined') {
+                audioTrackConfig = {
+                  codec: 'aac',
+                  sampleRate: masterAudioBuffer.sampleRate,
+                  numberOfChannels: masterAudioBuffer.numberOfChannels
+                };
+                console.log('[EXPORT_LOG] Audio track ready:', masterAudioBuffer.duration, 'sec');
+              }
             }
+          } catch (aErr) {
+            console.warn('Audio master track loading warning:', aErr);
           }
-        } catch (aErr) {
-          console.warn('Audio master track loading warning:', aErr);
+        } else {
+          console.log('[EXPORT_LOG] Audio is disabled. Exporting silent video.');
         }
 
         const muxerOptions = {
@@ -1764,6 +1910,7 @@
       $('#emptyState').style.display = 'flex';
       $('#pageCount').textContent = '0 trang';
       $('#exportButton').disabled = true;
+      if ($('#btnSnapshot4K')) $('#btnSnapshot4K').disabled = true;
       $('#stageHeading').textContent = 'QBiz Book Motion · Video lật sách 3D';
       $('#stageSub').textContent = 'Nạp PDF hoặc ảnh để tự dựng sách 3D, mở bìa, uốn cong lật trang và xuất MP4 1080p.';
       $('#fileInput').value = '';
@@ -1778,6 +1925,8 @@
     };
 
     $('#exportButton').onclick = exportVideo;
+    const snapBtn = $('#btnSnapshot4K');
+    if (snapBtn) snapBtn.onclick = takeSnapshot4K;
 
     $('#timeline').oninput = e => {
       app.playing = false;
@@ -1866,6 +2015,20 @@
     $$('[data-scene]').forEach(b => b.onclick = () => setScene(b.dataset.scene));
     $$('[data-camera]').forEach(b => b.onclick = () => setCamera(b.dataset.camera));
     $$('[data-style]').forEach(b => b.onclick = () => setMotionStyle(b.dataset.style));
+
+    const audioTog = $('#audioToggle');
+    if (audioTog) {
+      audioTog.onchange = e => {
+        app.audioEnabled = e.target.checked;
+        const icon = $('#audioIcon');
+        if (icon) icon.textContent = app.audioEnabled ? '🔊' : '🔇';
+        toast(app.audioEnabled ? 'Đã bật âm thanh lật giấy ASMR' : 'Đã tắt âm thanh (Video câm)');
+      };
+    }
+
+    $$('[data-spread]').forEach(b => {
+      b.onclick = () => setSpread(parseInt(b.dataset.spread, 10));
+    });
 
     setRatio('16:9');
     setScene('white');

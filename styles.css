@@ -126,3 +126,61 @@
   color: #93c5fd !important;
 }
 
+/* Snapshot 4K Button & Spread Selector & Audio Toggle */
+.snapshot-button {
+  width: 100%;
+  height: 35px;
+  margin-top: 8px;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  background: rgba(30, 58, 95, 0.45);
+  color: #bfdbfe;
+  font-weight: 600;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: all 0.2s ease;
+}
+.snapshot-button:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.25);
+  border-color: #60a5fa;
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+}
+.snapshot-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.spread-row {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 6px !important;
+  margin-top: 6px !important;
+}
+.spread-row .choice {
+  height: 28px !important;
+  font-size: 8.5px !important;
+  padding: 0 6px !important;
+}
+
+.audio-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 8px 10px;
+  background: #101e2e;
+  border: 1px solid #34465b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.audio-toggle:hover {
+  border-color: #5579a7;
+}
+
+
