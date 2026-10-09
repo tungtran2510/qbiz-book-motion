@@ -43,7 +43,9 @@
     coverMode: true,
     bookWidth: 1.25,
     bookHeight: 1.8,
-    motionStyle: 'deep_curl'
+    motionStyle: 'deep_curl',
+    watermarkEnabled: false,
+    watermarkText: 'QBiz Book Motion'
   };
   window.app = app;
 
@@ -338,23 +340,25 @@
     },
     check(time) {
       if (!app.playing) return;
-      if (time >= 1.05 && time < 1.45 && !this.playedTriggers.open) {
+      const sigma = (app.duration || 10) / 10;
+      if (time >= 1.05 * sigma && time < 1.45 * sigma && !this.playedTriggers.open) {
         this.play('open');
         this.playedTriggers.open = true;
       }
-      if (time >= 4.25 && time < 4.65 && !this.playedTriggers.flip) {
+      if (time >= 4.25 * sigma && time < 4.65 * sigma && !this.playedTriggers.flip) {
         this.play('flip');
         this.playedTriggers.flip = true;
       }
-      if (time >= 8.55 && time < 8.95 && !this.playedTriggers.close) {
+      if (time >= 8.55 * sigma && time < 8.95 * sigma && !this.playedTriggers.close) {
         this.play('close');
         this.playedTriggers.close = true;
       }
     },
     resetTriggers(time) {
-      if (time < 1.0) this.playedTriggers.open = false;
-      if (time < 4.2) this.playedTriggers.flip = false;
-      if (time < 8.5) this.playedTriggers.close = false;
+      const sigma = (app.duration || 10) / 10;
+      if (time < 1.0 * sigma) this.playedTriggers.open = false;
+      if (time < 4.2 * sigma) this.playedTriggers.flip = false;
+      if (time < 8.5 * sigma) this.playedTriggers.close = false;
     }
   };
 
@@ -847,8 +851,13 @@
     const takeOffArr = new Float32Array(cols + 1);
     const landArr = new Float32Array(cols + 1);
     const takeOff = smooth7(clamp((0.10 - q) / 0.10, 0, 1));
-    const land = smooth7(clamp((q - 0.90) / 0.10, 0, 1));
+    // Hạ cánh giảm xóc với Perlin Smootherstep (book-slipstream-multi-sheet-physics)
+    const landRaw = clamp((q - 0.86) / 0.14, 0, 1);
+    const land = smootherstep(landRaw);
     const cushionWeight = (q > 0.65) ? Math.sin(Math.PI * clamp((q - 0.65) / 0.35, 0, 1)) : 0;
+    const airCushionFloat = (q > 0.74 && q < 0.98)
+      ? Math.sin(Math.PI * clamp((q - 0.74) / 0.24, 0, 1)) * 0.0030 * effCurl
+      : 0;
     const inflectWeight = Math.sin(Math.PI * clamp((q - 0.28) / 0.52, 0, 1));
 
     for (let ix = 0; ix <= cols; ix++) {
@@ -914,7 +923,7 @@
 
           const ldFac = landArr[ix];
           mx = (1 - ldFac) * finalX0 + ldFac * (-u * W);
-          mz = ((1 - ldFac) * finalZ0 + ldFac * restZArr[ix]) + q * 0.002;
+          mz = ((1 - ldFac) * finalZ0 + ldFac * restZArr[ix]) + q * 0.002 + airCushionFloat * Math.pow(u, 1.6);
 
           nx = -s;
           nz = c;
@@ -1056,15 +1065,16 @@
     const style = MOTION_STYLES[app.motionStyle] || MOTION_STYLES.deep_curl;
     const fanScale = (style.fanningFactor !== undefined) ? style.fanningFactor : 1.0;
 
-    // Lực hút khí động học kéo phân tầng các lớp trang giấy khi tờ trên cất cánh (Panel 4)
-    const suction0 = (flipQ > 0.01 && flipQ < 0.48)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.01) / 0.47, 0, 1)) * fanScale
+    // Lực hút khí động học kéo phân tầng các lớp trang giấy khi tờ trên cất cánh (book-slipstream-multi-sheet-physics)
+    // z_slipstream(u, q) = sin(pi * clamp((q - 0.05) / 0.45, 0, 1)) * A_lift * u^1.8
+    const suction0 = (flipQ > 0.04 && flipQ < 0.48)
+      ? Math.sin(Math.PI * clamp((flipQ - 0.04) / 0.44, 0, 1)) * fanScale
       : 0;
-    const suction1 = (flipQ > 0.03 && flipQ < 0.48)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.03) / 0.45, 0, 1)) * fanScale
+    const suction1 = (flipQ > 0.07 && flipQ < 0.48)
+      ? Math.sin(Math.PI * clamp((flipQ - 0.07) / 0.41, 0, 1)) * fanScale
       : 0;
-    const suction2 = (flipQ > 0.06 && flipQ < 0.48)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.06) / 0.42, 0, 1)) * fanScale
+    const suction2 = (flipQ > 0.10 && flipQ < 0.48)
+      ? Math.sin(Math.PI * clamp((flipQ - 0.10) / 0.38, 0, 1)) * fanScale
       : 0;
 
     for (let iy = 0; iy <= rows; iy++) {
@@ -1074,17 +1084,17 @@
         const baseZ = factor * restingZ(u);
         const uShape = Math.pow(u, 1.8);
 
-        // Lá trên cùng (Trang kế tiếp)
-        pos0.setZ(idx, baseZ + suction0 * 0.0032 * uShape);
+        // Lá trên cùng (Trang kế tiếp: nhấc ~1.7mm)
+        pos0.setZ(idx, baseZ + suction0 * 0.0034 * uShape);
 
-        // Tầng phụ 1 (Sub-leaf 1)
+        // Tầng phụ 1 (Sub-leaf 1: nhấc ~1.1mm)
         if (pos1) {
-          pos1.setZ(idx, baseZ + suction1 * 0.0020 * uShape);
+          pos1.setZ(idx, baseZ + suction1 * 0.0022 * uShape);
         }
 
-        // Tầng phụ 2 (Sub-leaf 2)
+        // Tầng phụ 2 (Sub-leaf 2: nhấc ~0.6mm)
         if (pos2) {
-          pos2.setZ(idx, baseZ + suction2 * 0.0010 * uShape);
+          pos2.setZ(idx, baseZ + suction2 * 0.0012 * uShape);
         }
       }
     }
@@ -1106,22 +1116,24 @@
   function updateCameraFraming(aspectRatio, coverOpenFactor = 1.0, time = 0) {
     const aspect = aspectRatio || app.camera3D.aspect || (16 / 9);
     const W = app.bookWidth;
-    const t = clamp(time, 0, 10);
+    const dur = app.duration || 10;
+    const sigma = dur / 10;
+    const t = clamp(time, 0, dur);
 
     // 1. Cinematic Dolly Zoom (Nhẹ nhàng tịnh tiến lại gần 3.5% khi mở sách và lùi lại khi đóng)
-    const openProg = smooth7(clamp((t - 0.8) / 1.4, 0, 1));
-    const closeProg = smooth7(clamp((t - 8.4) / 1.4, 0, 1));
+    const openProg = smooth7(clamp((t - 0.8 * sigma) / (1.4 * sigma), 0, 1));
+    const closeProg = smooth7(clamp((t - 8.4 * sigma) / (1.4 * sigma), 0, 1));
     const activeOpen = openProg * (1 - closeProg);
     const dollyFactor = 1.0 - 0.035 * activeOpen;
 
     // 2. Cinematic Micro-Drift (Chuyển động lia máy micro tinh tế, mượt mà chuẩn Hollywood)
-    const driftPhase = clamp((t - 2.2) / 6.2, 0, 1);
+    const driftPhase = clamp((t - 2.2 * sigma) / (6.2 * sigma), 0, 1);
     const driftWeight = activeOpen;
     const microDriftX = Math.sin(driftPhase * Math.PI) * 0.032 * driftWeight;
     const microDriftZ = (1 - Math.cos(driftPhase * Math.PI)) * 0.018 * driftWeight;
 
     // 3. Page Flip Dynamic Reaction (Phản ứng nâng nhẹ máy theo nhịp tờ giấy cất cánh)
-    const flipPhase = clamp((t - 4.2) / 1.4, 0, 1);
+    const flipPhase = clamp((t - 4.2 * sigma) / (1.4 * sigma), 0, 1);
     const flipReaction = Math.sin(Math.PI * flipPhase) * 0.014;
 
     // Khóa ổn định Tripod tuyệt đối cho Reader View (chữ đứng yên 100%, không bị lắc hay trôi khi đọc)
@@ -1216,17 +1228,23 @@
     $('#cameraName').textContent = { product: 'Product 45°', reader: 'Reader View', top: 'Top View (Từ trên xuống)' }[app.camera] || 'Top View (Từ trên xuống)';
   }
 
-  // TIMELINE TIÊU CHUẨN 10 GIÂY
+  // TIMELINE CO GIÃN ĐA THỜI LƯỢNG (5s / 10s / 15s)
   function applyTime(time, customAspect = null) {
     if (!app.bookGroup) return;
-    const t = clamp(time, 0, 10);
+    const dur = app.duration || 10;
+    const sigma = dur / 10;
+    const t = clamp(time, 0, dur);
     const W = app.bookWidth;
 
-    // 1. Mở bìa trước (0.8s -> 2.2s) & Đóng bìa (8.4s -> 9.8s) với Smoothstep bậc 7 (Triệt tiêu 0 Jerk)
-    const rawOpen = clamp((t - 0.8) / 1.4, 0, 1);
+    // 1. Mở bìa trước (0.8s -> 2.2s scaled) & Đóng bìa (8.4s -> 9.8s scaled) với Smoothstep bậc 7 (Triệt tiêu 0 Jerk)
+    const openStart = 0.8 * sigma;
+    const openDur = 1.4 * sigma;
+    const rawOpen = clamp((t - openStart) / openDur, 0, 1);
     const openProg = smooth7(rawOpen);
 
-    const rawClose = clamp((t - 8.4) / 1.4, 0, 1);
+    const closeStart = 8.4 * sigma;
+    const closeDur = 1.4 * sigma;
+    const rawClose = clamp((t - closeStart) / closeDur, 0, 1);
     const closeProg = smooth7(rawClose);
 
     const coverFactor = clamp(openProg * (1 - closeProg), 0, 1);
@@ -1238,9 +1256,9 @@
       app.cover.visible = true; // Luôn luôn hiển thị liên tục, KHÔNG BAO GIỜ bị ẩn/hiện giật lag
     }
 
-    // 2. Lật trang (4.2s -> 5.6s) với Smoothstep bậc 7 (Triệt tiêu 0 Jerk)
-    const flipStart = 4.2;
-    const flipDuration = 1.4;
+    // 2. Lật trang (4.2s -> 5.6s scaled) với Smoothstep bậc 7 (Triệt tiêu 0 Jerk)
+    const flipStart = 4.2 * sigma;
+    const flipDuration = 1.4 * sigma;
     const isFlipping = t >= flipStart && t <= flipStart + flipDuration;
     const rawQ = clamp((t - flipStart) / flipDuration, 0, 1);
     const q = smooth7(rawQ);
@@ -1256,7 +1274,7 @@
     }
 
     // Uốn cong bìa và trang sách mềm mại theo độ mở kết hợp lực hút khí động học và đệm khí tiếp đất
-    if (t < 8.4) {
+    if (t < closeStart) {
       updateCoverDeformation(openProg, false, activeQ);
     } else {
       updateCoverDeformation(closeProg, true, 0);
@@ -1276,7 +1294,7 @@
     // Dynamic Stack Breathing & Mass Transfer (Chuyển khối lượng tệp giấy vật lý & thở theo nhịp lật)
     if (app.rightStack && app.leftStack) {
       const thick = app.bookThick || 0.08;
-      const qFlip = (t >= 5.6 && t < 8.4) ? 1.0 : (isFlipping ? q : 0.0);
+      const qFlip = (t >= (flipStart + flipDuration) && t < closeStart) ? 1.0 : (isFlipping ? q : 0.0);
       const rightScaleY = 1.0 - 0.05 * qFlip;
       const leftScaleY = (0.22 + 0.05 * qFlip) * coverFactor;
       const breathing = isFlipping ? Math.sin(Math.PI * q) * 0.015 : 0;
@@ -1318,10 +1336,8 @@
         }
       }
       if (app.activeSheet) app.activeSheet.visible = false;
-    } else if (t < 8.4) {
-      // Giai đoạn lật trang (4.2s -> 5.6s) VÀ đọc Spread 2 (5.6s -> 8.4s):
-      // Khi q >= 0.5 (t >= 4.9s), tờ active đã lật qua phương thẳng đứng, che kín cánh trái.
-      // Pre-bind cánh trái bên dưới thành Trang 3 để 100% không bao giờ bị lộ Trang 1.
+    } else if (t < closeStart) {
+      // Giai đoạn lật trang VÀ đọc Spread 2
       if (q >= 0.5) {
         if (app.coverBackMesh && app.pageTextures[3] && app.coverBackMesh.material.map !== app.pageTextures[3]) {
           app.coverBackMesh.material.map = app.pageTextures[3];
@@ -1342,7 +1358,7 @@
         }
       }
 
-      // Giữ activeSheet hiển thị liên tục, mượt mà từ 4.2s đến hết 8.4s (không bị ẩn giật tại 5.6s)
+      // Giữ activeSheet hiển thị liên tục, mượt mà từ flipStart đến hết closeStart
       if (app.activeSheet) {
         app.activeSheet.visible = true;
         app.activeFrontMesh.visible = true;
@@ -1351,7 +1367,7 @@
         deformSheet(app.activeFrontMesh, app.activeBackMesh, app.activeRimMesh, q, app.curlAmount);
       }
     } else {
-      // t >= 8.4s: Giai đoạn đóng bìa lại
+      // t >= closeStart: Giai đoạn đóng bìa lại
       // Ẩn activeSheet để cánh bìa app.cover làm chủ hoàn toàn chuyển động đóng
       if (app.activeSheet) app.activeSheet.visible = false;
 
@@ -1405,15 +1421,16 @@
     const btnTextEl = $('#exportBtnText');
     const snapBtnTextEl = $('#snapshotBtnText');
 
+    const durStr = `${app.duration || 10}s`;
     if (isTransparent) {
-      if (titleEl) titleEl.textContent = 'XUẤT VIDEO ALPHA (1080P)';
-      if (formatEl) formatEl.textContent = `${s.export} · WebM Alpha (Trong Suốt)`;
-      if (btnTextEl) btnTextEl.textContent = 'Xuất video WebM Alpha (Tách Nền)';
+      if (titleEl) titleEl.textContent = `XUẤT VIDEO ALPHA (${durStr.toUpperCase()})`;
+      if (formatEl) formatEl.textContent = `${s.export} · ${durStr} · WebM Alpha (Trong Suốt)`;
+      if (btnTextEl) btnTextEl.textContent = `Xuất video WebM Alpha ${durStr} (Tách Nền)`;
       if (snapBtnTextEl) snapBtnTextEl.textContent = `Chụp ảnh Mockup 4K Tách Nền (${s.snap})`;
     } else {
-      if (titleEl) titleEl.textContent = 'XUẤT VIDEO MP4 (1080P)';
-      if (formatEl) formatEl.textContent = `${s.export} · Chuẩn H.264`;
-      if (btnTextEl) btnTextEl.textContent = 'Xuất video MP4 1080p (H.264)';
+      if (titleEl) titleEl.textContent = `XUẤT VIDEO MP4 (${durStr.toUpperCase()})`;
+      if (formatEl) formatEl.textContent = `${s.export} · ${durStr} · Chuẩn H.264`;
+      if (btnTextEl) btnTextEl.textContent = `Xuất video MP4 1080p ${durStr} (H.264)`;
       if (snapBtnTextEl) snapBtnTextEl.textContent = `Chụp ảnh Mockup 4K Ultra HD (${s.snap})`;
     }
   }
@@ -1479,6 +1496,24 @@
     applyTime(app.time);
   }
 
+  function setMotionStyle(styleKey) {
+    if (!MOTION_STYLES[styleKey]) return;
+    app.motionStyle = styleKey;
+    const style = MOTION_STYLES[styleKey];
+
+    $$('[data-style]').forEach(b => {
+      b.classList.toggle('active', b.dataset.style === styleKey);
+    });
+
+    if (styleKey === 'reader_focus') {
+      setCamera('reader');
+    }
+
+    applyTime(app.time);
+    app.dirty = true;
+    toast(`Đã chọn: ${style.name}`);
+  }
+
   function setRatio(r) {
     app.ratio = r;
     $$('[data-ratio]').forEach(b => b.classList.toggle('active', b.dataset.ratio === r));
@@ -1512,6 +1547,184 @@
       resize();
     }, 40);
     app.dirty = true;
+  }
+
+  function setDuration(d) {
+    app.duration = Number(d) || 10;
+    $$('[data-duration]').forEach(b => {
+      b.classList.toggle('active', Number(b.dataset.duration) === app.duration);
+    });
+
+    const durEl = $('#duration');
+    if (durEl) {
+      durEl.textContent = `00:${String(app.duration).padStart(2, '0')}.0`;
+    }
+
+    const timelineEl = $('#timeline');
+    if (timelineEl) {
+      timelineEl.max = app.duration;
+      if (app.time > app.duration) {
+        app.time = 0;
+      }
+      timelineEl.value = app.time;
+    }
+
+    const recipeDurEl = document.querySelector('.recipe-duration');
+    if (recipeDurEl) recipeDurEl.textContent = `${app.duration}s`;
+
+    const recipeTag = document.querySelector('.recipe-tag');
+    if (recipeTag) {
+      recipeTag.innerHTML = `<i></i> VIDEO ${app.duration} GIÂY`;
+    }
+
+    const rulerSpans = $$('.timeline-ruler span');
+    if (rulerSpans.length >= 2) {
+      rulerSpans[1].textContent = `00:${String(app.duration).padStart(2, '0')}`;
+    }
+
+    updateExportLabels();
+    applyTime(app.time);
+    updateTimeline();
+    toast(`Đã chọn thời lượng: ${app.duration} giây`);
+  }
+
+  function setWatermark(enabled, text) {
+    app.watermarkEnabled = !!enabled;
+    if (text !== undefined && text !== null && text.trim() !== '') {
+      app.watermarkText = text.trim();
+    }
+
+    const toggle = $('#watermarkToggle');
+    if (toggle) toggle.checked = app.watermarkEnabled;
+
+    const input = $('#watermarkInput');
+    if (input) {
+      input.disabled = !app.watermarkEnabled;
+      if (text !== undefined) input.value = app.watermarkText;
+    }
+
+    const stageWm = $('#stageWatermark');
+    if (stageWm) {
+      stageWm.style.display = app.watermarkEnabled ? 'flex' : 'none';
+      const textEl = $('#stageWatermarkText');
+      if (textEl) textEl.textContent = app.watermarkText;
+    }
+    app.dirty = true;
+  }
+
+  function drawWatermarkOnCanvas(ctx, w, h, scale = 1.0) {
+    if (!app.watermarkEnabled) return;
+    const text = app.watermarkText || 'QBiz Book Motion';
+    ctx.save();
+    const fontSize = Math.round(14 * scale);
+    const padX = Math.round(10 * scale);
+    const padY = Math.round(6 * scale);
+    const margin = Math.round(20 * scale);
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    const textMetrics = ctx.measureText(text);
+    const iconSize = Math.round(15 * scale);
+    const gap = Math.round(7 * scale);
+    const boxW = padX * 2 + iconSize + gap + textMetrics.width;
+    const boxH = fontSize + padY * 2;
+    const x = w - boxW - margin;
+    const y = h - boxH - margin;
+
+    // Rounded background pill with shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = Math.round(10 * scale);
+    ctx.fillStyle = 'rgba(8, 18, 31, 0.72)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = Math.max(1, Math.round(scale));
+    const r = Math.round(6 * scale);
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, boxW, boxH, r);
+    } else {
+      ctx.rect(x, y, boxW, boxH);
+    }
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.stroke();
+
+    // Icon badge 'Q'
+    const iconX = x + padX;
+    const iconY = y + (boxH - iconSize) / 2;
+    ctx.fillStyle = '#3b82f6';
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(iconX, iconY, iconSize, iconSize, Math.round(3 * scale));
+    } else {
+      ctx.rect(iconX, iconY, iconSize, iconSize);
+    }
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `800 ${Math.round(10 * scale)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Q', iconX + iconSize / 2, iconY + iconSize / 2 + 0.5);
+
+    // Text
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, iconX + iconSize + gap, y + boxH / 2);
+
+    ctx.restore();
+  }
+
+  function handleUrlParams() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params || ![...params.keys()].length) return;
+
+    if (params.has('ratio')) {
+      const r = params.get('ratio');
+      if (['16:9', '9:16', '1:1', '4:3'].includes(r)) setRatio(r);
+    }
+
+    if (params.has('scene')) {
+      const s = params.get('scene');
+      if (['white', 'navy', 'transparent'].includes(s)) setScene(s);
+    }
+
+    if (params.has('style')) {
+      const st = params.get('style');
+      if (MOTION_STYLES[st]) setMotionStyle(st);
+    }
+
+    if (params.has('camera')) {
+      const cam = params.get('camera');
+      if (['top', 'reader', 'product'].includes(cam)) setCamera(cam);
+    }
+
+    if (params.has('duration')) {
+      const d = parseInt(params.get('duration'), 10);
+      if ([5, 10, 15].includes(d)) setDuration(d);
+    }
+
+    if (params.has('spread')) {
+      const sp = parseInt(params.get('spread'), 10);
+      if (sp >= 0 && sp <= 3) setSpread(sp);
+    }
+
+    if (params.has('watermark') || params.has('wm')) {
+      const wm = params.get('watermark') || params.get('wm');
+      if (wm === '0' || wm === 'false' || wm === 'off') {
+        setWatermark(false);
+      } else {
+        const text = (wm === '1' || wm === 'true' || wm === 'on') ? 'QBiz Book Motion' : wm;
+        setWatermark(true, text);
+      }
+    }
+
+    if (params.get('autostart') === '1' || params.get('autostart') === 'true') {
+      setTimeout(() => {
+        if ($('#playButton') && !app.playing) {
+          $('#playButton').click();
+        }
+      }, 600);
+    }
   }
 
   function toast(msg) {
@@ -1706,9 +1919,20 @@
       const ratioStr = app.ratio.replace(':', 'x');
       const timeStr = app.time.toFixed(1).replace('.', 's');
 
+      let exportCanvas = app.renderer.domElement;
+      if (app.watermarkEnabled) {
+        const snapWmCanvas = document.createElement('canvas');
+        snapWmCanvas.width = w4k;
+        snapWmCanvas.height = h4k;
+        const snapWmCtx = snapWmCanvas.getContext('2d');
+        snapWmCtx.drawImage(app.renderer.domElement, 0, 0);
+        drawWatermarkOnCanvas(snapWmCtx, w4k, h4k, w4k / 1080);
+        exportCanvas = snapWmCanvas;
+      }
+
       // Trích xuất blob PNG bảo toàn 100% màu gốc không nén
       await new Promise(resolve => {
-        app.renderer.domElement.toBlob(blob => {
+        exportCanvas.toBlob(blob => {
           if (blob) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1745,6 +1969,8 @@
       btn.disabled = false;
     }
   }
+  window.takeSnapshot4K = takeSnapshot4K;
+  window.exportVideo = exportVideo;
 
   // XUẤT VIDEO MP4 CHUẨN XÁC 10.00s (H.264 / 1080P ĐÚNG PIXEL 1:1)
   async function exportVideo() {
@@ -1782,7 +2008,15 @@
 
       if (isTransparent) {
         button.innerHTML = '<span>⚡</span> Đang chuẩn bị xuất WebM Alpha (Trong Suốt)…';
-        const stream = app.renderer.domElement.captureStream(fps);
+        let transWmCanvas = null;
+        let transWmCtx = null;
+        if (app.watermarkEnabled) {
+          transWmCanvas = document.createElement('canvas');
+          transWmCanvas.width = w;
+          transWmCanvas.height = h;
+          transWmCtx = transWmCanvas.getContext('2d');
+        }
+        const stream = (transWmCanvas || app.renderer.domElement).captureStream(fps);
 
         let audioCtx = null;
         let audioSource = null;
@@ -1795,6 +2029,9 @@
               const dest = audioCtx.createMediaStreamDestination();
               audioSource = audioCtx.createBufferSource();
               audioSource.buffer = await audioCtx.decodeAudioData(aBuf);
+              if (duration !== 10) {
+                audioSource.playbackRate.value = 10 / duration;
+              }
               audioSource.connect(dest);
               const audioTrack = dest.stream.getAudioTracks()[0];
               if (audioTrack) stream.addTrack(audioTrack);
@@ -1816,6 +2053,12 @@
           app.time = t;
           applyTime(t, w / h);
           app.renderer.render(app.scene3D, app.camera3D);
+
+          if (transWmCtx) {
+            transWmCtx.clearRect(0, 0, w, h);
+            transWmCtx.drawImage(app.renderer.domElement, 0, 0);
+            drawWatermarkOnCanvas(transWmCtx, w, h, w / 1080);
+          }
 
           const pct = Math.round(((f + 1) / totalFrames) * 100);
           button.innerHTML = `<span>⏳</span> Đang xuất WebM Alpha: ${pct}%`;
@@ -1904,8 +2147,9 @@
             const right = masterAudioBuffer.getChannelData(1);
             const chunkSize = 2048;
 
-            for (let offset = 0; offset < left.length; offset += chunkSize) {
-              const frames = Math.min(chunkSize, left.length - offset);
+            const totalAudioFrames = Math.min(left.length, Math.round(duration * masterAudioBuffer.sampleRate));
+            for (let offset = 0; offset < totalAudioFrames; offset += chunkSize) {
+              const frames = Math.min(chunkSize, totalAudioFrames - offset);
               const chunkData = new Float32Array(frames * 2);
               chunkData.set(left.subarray(offset, offset + frames), 0);
               chunkData.set(right.subarray(offset, offset + frames), frames);
@@ -1945,6 +2189,15 @@
           framerate: fps
         });
 
+        let videoWmCanvas = null;
+        let videoWmCtx = null;
+        if (app.watermarkEnabled) {
+          videoWmCanvas = document.createElement('canvas');
+          videoWmCanvas.width = w;
+          videoWmCanvas.height = h;
+          videoWmCtx = videoWmCanvas.getContext('2d');
+        }
+
         console.log(`[EXPORT_LOG] Encoding ${totalFrames} video frames (30 FPS) directly from WebGL canvas (zero ghosting, 100% sharp)...`);
         for (let f = 0; f < totalFrames; f++) {
           if (encodeError) throw encodeError;
@@ -1954,8 +2207,16 @@
           applyTime(t, w / h);
           app.renderer.render(app.scene3D, app.camera3D);
 
+          let frameCanvas = app.renderer.domElement;
+          if (app.watermarkEnabled && videoWmCtx) {
+            videoWmCtx.clearRect(0, 0, w, h);
+            videoWmCtx.drawImage(app.renderer.domElement, 0, 0);
+            drawWatermarkOnCanvas(videoWmCtx, w, h, w / 1080);
+            frameCanvas = videoWmCanvas;
+          }
+
           const timestampMicroseconds = Math.round(f * (1000000 / fps));
-          const videoFrame = new VideoFrame(app.renderer.domElement, { timestamp: timestampMicroseconds });
+          const videoFrame = new VideoFrame(frameCanvas, { timestamp: timestampMicroseconds });
           encoder.encode(videoFrame, { keyFrame: f % 30 === 0 });
           videoFrame.close();
 
@@ -1993,11 +2254,19 @@
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
 
-        toast(`Xuất video MP4 1080p thành công! (${(blob.size / 1024 / 1024).toFixed(1)} MB, đúng 10.0 giây)`);
+        toast(`Xuất video MP4 1080p thành công! (${(blob.size / 1024 / 1024).toFixed(1)} MB, đúng ${duration.toFixed(1)} giây)`);
       } else {
         // Fallback MediaRecorder với canvas đã resize chuẩn 1080p
         button.innerHTML = '<span>⏳</span> Đang ghi video MP4… 0%';
-        const stream = app.renderer.domElement.captureStream(fps);
+        let mrWmCanvas = null;
+        let mrWmCtx = null;
+        if (app.watermarkEnabled) {
+          mrWmCanvas = document.createElement('canvas');
+          mrWmCanvas.width = w;
+          mrWmCanvas.height = h;
+          mrWmCtx = mrWmCanvas.getContext('2d');
+        }
+        const stream = (mrWmCanvas || app.renderer.domElement).captureStream(fps);
         const mime = MediaRecorder.isTypeSupported('video/mp4;codecs=h264') ? 'video/mp4;codecs=h264' :
                      MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' :
                      MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
@@ -2013,6 +2282,12 @@
           app.time = t;
           applyTime(t, w / h);
           app.renderer.render(app.scene3D, app.camera3D);
+
+          if (mrWmCtx) {
+            mrWmCtx.clearRect(0, 0, w, h);
+            mrWmCtx.drawImage(app.renderer.domElement, 0, 0);
+            drawWatermarkOnCanvas(mrWmCtx, w, h, w / 1080);
+          }
 
           const pct = Math.round(((f + 1) / totalFrames) * 100);
           button.innerHTML = `<span>⏳</span> Đang ghi video: ${pct}%`;
@@ -2031,7 +2306,7 @@
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 8000);
 
-        toast(`Xuất video thành công! (${(blob.size / 1024 / 1024).toFixed(1)} MB)`);
+        toast(`Xuất video thành công! (${(blob.size / 1024 / 1024).toFixed(1)} MB, ${duration.toFixed(1)} giây)`);
       }
     } catch (e) {
       console.error(e);
@@ -2132,23 +2407,6 @@
       applyTime(app.time);
     };
 
-    function setMotionStyle(styleKey) {
-      if (!MOTION_STYLES[styleKey]) return;
-      app.motionStyle = styleKey;
-      const style = MOTION_STYLES[styleKey];
-
-      $$('[data-style]').forEach(b => {
-        b.classList.toggle('active', b.dataset.style === styleKey);
-      });
-
-      if (styleKey === 'reader_focus') {
-        setCamera('reader');
-      }
-
-      applyTime(app.time);
-      app.dirty = true;
-      toast(`Đã chọn: ${style.name}`);
-    }
 
     const sampleBtn = $('#btnSamplePdf');
     if (sampleBtn) {
@@ -2191,10 +2449,31 @@
       b.onclick = () => setSpread(parseInt(b.dataset.spread, 10));
     });
 
+    $$('[data-duration]').forEach(b => {
+      b.onclick = () => setDuration(parseInt(b.dataset.duration, 10));
+    });
+
+    const wmTog = $('#watermarkToggle');
+    if (wmTog) {
+      wmTog.onchange = e => {
+        setWatermark(e.target.checked);
+        toast(e.target.checked ? 'Đã bật Watermark thương hiệu' : 'Đã tắt Watermark');
+      };
+    }
+    const wmInput = $('#watermarkInput');
+    if (wmInput) {
+      wmInput.oninput = e => {
+        setWatermark(app.watermarkEnabled, e.target.value);
+      };
+    }
+
     setRatio('16:9');
     setScene('white');
     setCamera('product');
     setMotionStyle('deep_curl');
+    setDuration(10);
+    setWatermark(false);
+    handleUrlParams();
     applyTime(0);
   }
 

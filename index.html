@@ -14,7 +14,7 @@
   <meta property="og:description" content="Tạo video lật sách 3D điện ảnh từ PDF / ảnh, uốn cong giấy tự nhiên và xuất MP4 1080p.">
   <meta property="og:image" content="logo-square.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="styles.css?v=20261010-phase1-ratios-alpha">
+  <link rel="stylesheet" href="styles.css?v=20261010-phase2-slipstream">
 </head>
 <body>
   <header class="topbar">
@@ -48,7 +48,12 @@
           </div>
           <span id="qualityLabel">60 FPS · SMOOTH BEND</span>
         </div>
-        <div id="stage"></div>
+        <div id="stage">
+          <div id="stageWatermark" class="stage-watermark" style="display:none;">
+            <span class="wm-icon">Q</span>
+            <span class="wm-text" id="stageWatermarkText">QBiz Book Motion</span>
+          </div>
+        </div>
         <div class="stage-empty" id="emptyState">
           <div class="empty-book">▱</div>
           <b>Không gian dựng sách 3D</b>
@@ -214,6 +219,22 @@
             </span>
             <input type="checkbox" id="audioToggle" checked style="accent-color:#3b82f6;width:15px;height:15px;cursor:pointer;">
           </label>
+
+          <div class="field-label second" style="margin-top:14px;">THỜI LƯỢNG & NHỊP ĐIỆU VIDEO</div>
+          <div class="choice-row pace-row" id="paceRow">
+            <button class="choice" data-duration="5"><b>5s</b><small>Lướt nhanh TikTok</small></button>
+            <button class="choice active" data-duration="10"><b>10s</b><small>Điện ảnh chuẩn</small></button>
+            <button class="choice" data-duration="15"><b>15s</b><small>Dừng đọc chi tiết</small></button>
+          </div>
+
+          <div class="field-label second" style="margin-top:14px;">DẤU BẢN QUYỀN (WATERMARK)</div>
+          <div class="watermark-controls">
+            <label class="watermark-toggle-label" title="Bật/Tắt Watermark">
+              <input type="checkbox" id="watermarkToggle" style="accent-color:#3b82f6;width:15px;height:15px;cursor:pointer;">
+              <span>Bật Watermark</span>
+            </label>
+            <input type="text" id="watermarkInput" value="QBiz Book Motion" placeholder="Tên thương hiệu..." disabled>
+          </div>
         </section>
       </div>
 
@@ -258,6 +279,6 @@
   <script src="OrbitControls.js"></script>
   <script src="mp4-muxer.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="app.js?v=20261010-phase1-ratios-alpha"></script>
+  <script src="app.js?v=20261010-phase2-slipstream"></script>
 </body>
 </html>
