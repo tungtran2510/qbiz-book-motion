@@ -39,9 +39,54 @@
     curlAmount: 1.0,
     coverMode: true,
     bookWidth: 1.25,
-    bookHeight: 1.8
+    bookHeight: 1.8,
+    motionStyle: 'deep_curl'
   };
   window.app = app;
+
+  // ĐỊNH NGHĨA 4 PHONG CÁCH CHUYỂN ĐỘNG QUY CHUẨN (4 MOTION PRESET STYLES)
+  const MOTION_STYLES = {
+    deep_curl: {
+      key: 'deep_curl',
+      name: 'Phong cách 1: Uốn cong mềm (Panel 3)',
+      desc: 'Bìa và trang uốn cong sâu hình vòm mềm mại, sang trọng kiểu tạp chí bìa mềm',
+      curlFactor: 1.15,
+      coverCurlFactor: 1.25,
+      peelFactor: 0.35,
+      fanningFactor: 0.65,
+      defaultCamera: 'product'
+    },
+    diagonal_peel: {
+      key: 'diagonal_peel',
+      name: 'Phong cách 2: Bóc góc chéo điện ảnh (Panel 2 & 4)',
+      desc: 'Bóc nhấc từ góc chéo dưới trước, lượn sóng xoắn vặn và quạt tệp giấy đa tầng',
+      curlFactor: 0.95,
+      coverCurlFactor: 0.85,
+      peelFactor: 1.35,
+      fanningFactor: 1.25,
+      defaultCamera: 'product'
+    },
+    classic: {
+      key: 'classic',
+      name: 'Phong cách 3: Tiêu chuẩn phẳng',
+      desc: 'Lật phẳng êm dịu, thanh lịch, chuyển động tự nhiên truyền thống',
+      curlFactor: 0.65,
+      coverCurlFactor: 0.45,
+      peelFactor: 0.0,
+      fanningFactor: 0.35,
+      defaultCamera: 'product'
+    },
+    reader_focus: {
+      key: 'reader_focus',
+      name: 'Phong cách 4: Trải nghiệm đọc (Reader Focus)',
+      desc: 'Góc nhìn đối diện Reader View, trang nằm phẳng tối đa để đọc rõ từng chữ',
+      curlFactor: 0.45,
+      coverCurlFactor: 0.40,
+      peelFactor: 0.15,
+      fanningFactor: 0.25,
+      defaultCamera: 'reader'
+    }
+  };
 
   const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
   const smooth = x => { x = clamp(x); return x * x * (3 - 2 * x); };
@@ -774,6 +819,9 @@
     const posB = geomB.attributes.position;
     const posR = geomR ? geomR.attributes.position : null;
 
+    const style = MOTION_STYLES[app.motionStyle] || MOTION_STYLES.deep_curl;
+    const effCurl = curlIntensity * (style.curlFactor || 1.0);
+
     const W = app.bookWidth - 0.01;
     const cols = SUBDIV_X;
     const rows = SUBDIV_Y;
@@ -808,24 +856,25 @@
       const restAngle1 = Math.PI - restAngle0;
 
       const baseAngle = (1 - env_eff) * ((1 - q) * restAngle0 + q * restAngle1) + env_eff * spineAngle;
-      const arch = Math.sin(Math.PI * Math.pow(u, 0.80)) * 0.92 * curlIntensity * env_eff;
-      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.42 * curlIntensity * env_eff;
-      const cushion = cushionWeight * Math.pow(u, 1.5) * 0.20 * curlIntensity;
-      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.09 * inflectWeight * curlIntensity;
+      const arch = Math.sin(Math.PI * Math.pow(u, 0.80)) * 0.92 * effCurl * env_eff;
+      const roll = Math.sin(Math.PI * 0.5 * u) * (1.0 - q) * 0.42 * effCurl * env_eff;
+      const cushion = cushionWeight * Math.pow(u, 1.5) * 0.20 * effCurl;
+      const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.09 * inflectWeight * effCurl;
 
       commonPhi[ix] = baseAngle + arch + roll + cushion + sInflect;
     }
 
     // 2. Tinh chỉnh hiệu ứng lật góc chéo (Diagonal Corner Peel & Twist - Panel 2 Blueprint)
     // Trong khoảng q ∈ [0.005, 0.38], góc dưới bên phải (fore-edge bottom) nhấc lên trước với góc xoắn vặn
+    const peelScale = (style.peelFactor !== undefined) ? style.peelFactor : 1.0;
     const peelEnvelope = (q > 0.005 && q < 0.38)
-      ? Math.sin(Math.PI * clamp((q - 0.005) / 0.375, 0, 1))
+      ? Math.sin(Math.PI * clamp((q - 0.005) / 0.375, 0, 1)) * peelScale
       : 0;
 
     // Tích phân từng hàng (Row-by-Row Inextensible Arc-Length Integration)
     for (let iy = 0; iy <= rows; iy++) {
       const rowFrac = iy / rows; // 0 tại mép trên (iy=0), 1 tại mép dưới (iy=rows)
-      const rowCornerFactor = peelEnvelope * Math.pow(rowFrac, 1.35) * 0.26 * curlIntensity;
+      const rowCornerFactor = peelEnvelope * Math.pow(rowFrac, 1.35) * 0.26 * effCurl;
 
       let prevX = 0, prevZ = 0;
       for (let ix = 0; ix <= cols; ix++) {
@@ -910,15 +959,18 @@
     const normX = new Float32Array(cols + 1);
     const normZ = new Float32Array(cols + 1);
 
+    const style = MOTION_STYLES[app.motionStyle] || MOTION_STYLES.deep_curl;
+    const coverScale = (style.coverCurlFactor !== undefined) ? style.coverCurlFactor : 1.0;
+
     for (let ix = 0; ix <= cols; ix++) {
       const u = ix / cols;
       let zVal;
       if (!isClosing) {
-        // Độ uốn cong bìa mở mềm mại, cong rõ rệt như panel 3 "3. Mở bìa" trong ảnh mẫu
-        const openCurl = flex * (0.075 * Math.sin(Math.PI * Math.pow(u, 0.75)) + 0.095 * Math.pow(u, 1.5));
+        // Độ uốn cong bìa mở mềm mại theo phong cách được chọn
+        const openCurl = flex * (0.075 * Math.sin(Math.PI * Math.pow(u, 0.75)) + 0.095 * Math.pow(u, 1.5)) * coverScale;
         zVal = -factor * restingZ(u) - openCurl - cushionDepression * Math.pow(u, 1.5);
       } else {
-        const closeCurl = flex * (0.055 * Math.sin(Math.PI * Math.pow(u, 0.75)) + 0.075 * Math.pow(u, 1.5));
+        const closeCurl = flex * (0.055 * Math.sin(Math.PI * Math.pow(u, 0.75)) + 0.075 * Math.pow(u, 1.5)) * coverScale;
         zVal = -(1 - factor) * restingZ(u) + closeCurl;
       }
       midZ[ix] = zVal;
@@ -926,10 +978,10 @@
       const uNext = Math.min(1, u + 0.015);
       let zNext;
       if (!isClosing) {
-        const openCurlNext = flex * (0.075 * Math.sin(Math.PI * Math.pow(uNext, 0.75)) + 0.095 * Math.pow(uNext, 1.5));
+        const openCurlNext = flex * (0.075 * Math.sin(Math.PI * Math.pow(uNext, 0.75)) + 0.095 * Math.pow(uNext, 1.5)) * coverScale;
         zNext = -factor * restingZ(uNext) - openCurlNext - cushionDepression * Math.pow(uNext, 1.5);
       } else {
-        const closeCurlNext = flex * (0.055 * Math.sin(Math.PI * Math.pow(uNext, 0.75)) + 0.075 * Math.pow(uNext, 1.5));
+        const closeCurlNext = flex * (0.055 * Math.sin(Math.PI * Math.pow(uNext, 0.75)) + 0.075 * Math.pow(uNext, 1.5)) * coverScale;
         zNext = -(1 - factor) * restingZ(uNext) + closeCurlNext;
       }
       const slope = (zNext - zVal) / (0.015 * W);
@@ -993,16 +1045,18 @@
     const geom2 = app.subLeaf2 ? app.subLeaf2.geometry : null;
     const pos2 = geom2 ? geom2.attributes.position : null;
     const cols = SUBDIV_X, rows = SUBDIV_Y;
+    const style = MOTION_STYLES[app.motionStyle] || MOTION_STYLES.deep_curl;
+    const fanScale = (style.fanningFactor !== undefined) ? style.fanningFactor : 1.0;
 
     // Lực hút khí động học kéo phân tầng các lớp trang giấy khi tờ trên cất cánh (Panel 4)
     const suction0 = (flipQ > 0.01 && flipQ < 0.48)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.01) / 0.47, 0, 1))
+      ? Math.sin(Math.PI * clamp((flipQ - 0.01) / 0.47, 0, 1)) * fanScale
       : 0;
     const suction1 = (flipQ > 0.03 && flipQ < 0.48)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.03) / 0.45, 0, 1))
+      ? Math.sin(Math.PI * clamp((flipQ - 0.03) / 0.45, 0, 1)) * fanScale
       : 0;
     const suction2 = (flipQ > 0.06 && flipQ < 0.48)
-      ? Math.sin(Math.PI * clamp((flipQ - 0.06) / 0.42, 0, 1))
+      ? Math.sin(Math.PI * clamp((flipQ - 0.06) / 0.42, 0, 1)) * fanScale
       : 0;
 
     for (let iy = 0; iy <= rows; iy++) {
@@ -1725,10 +1779,6 @@
 
     $('#exportButton').onclick = exportVideo;
 
-    $$('[data-ratio]').forEach(b => b.onclick = () => setRatio(b.dataset.ratio));
-    $$('[data-scene]').forEach(b => b.onclick = () => setScene(b.dataset.scene));
-    $$('[data-camera]').forEach(b => b.onclick = () => setCamera(b.dataset.camera));
-
     $('#timeline').oninput = e => {
       app.playing = false;
       app.time = +e.target.value;
@@ -1772,20 +1822,22 @@
       applyTime(app.time);
     };
 
-    const sampleRealBtn = $('#btnSampleRealBook');
-    if (sampleRealBtn) {
-      sampleRealBtn.onclick = async () => {
-        try {
-          toast('Đang nạp Sách Ảnh Thật (5 trang)...');
-          const res = await fetch('sample-real-book/Sach-Dinh-Duong-Mau.pdf');
-          if (!res.ok) throw Error('Không thể tải file PDF từ máy chủ.');
-          const blob = await res.blob();
-          const file = new File([blob], 'Sach-Dinh-Duong-Mau.pdf', { type: 'application/pdf' });
-          filesInput([file]);
-        } catch (err) {
-          toast(`Lỗi nạp file mẫu: ${err.message}`);
-        }
-      };
+    function setMotionStyle(styleKey) {
+      if (!MOTION_STYLES[styleKey]) return;
+      app.motionStyle = styleKey;
+      const style = MOTION_STYLES[styleKey];
+
+      $$('[data-style]').forEach(b => {
+        b.classList.toggle('active', b.dataset.style === styleKey);
+      });
+
+      if (styleKey === 'reader_focus') {
+        setCamera('reader');
+      }
+
+      applyTime(app.time);
+      app.dirty = true;
+      toast(`Đã chọn: ${style.name}`);
     }
 
     const sampleBtn = $('#btnSamplePdf');
@@ -1810,9 +1862,15 @@
       filesInput([new File([blob], b.dataset.sample.split('/').pop(), { type: 'image/svg+xml' })]);
     });
 
+    $$('[data-ratio]').forEach(b => b.onclick = () => setRatio(b.dataset.ratio));
+    $$('[data-scene]').forEach(b => b.onclick = () => setScene(b.dataset.scene));
+    $$('[data-camera]').forEach(b => b.onclick = () => setCamera(b.dataset.camera));
+    $$('[data-style]').forEach(b => b.onclick = () => setMotionStyle(b.dataset.style));
+
     setRatio('16:9');
     setScene('white');
-    setCamera('top');
+    setCamera('product');
+    setMotionStyle('deep_curl');
     applyTime(0);
   }
 
