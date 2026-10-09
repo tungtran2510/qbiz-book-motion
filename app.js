@@ -127,8 +127,8 @@
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.04;
+    renderer.toneMapping = THREE.LinearToneMapping;
+    renderer.toneMappingExposure = 1.0;
     host.appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -146,16 +146,16 @@
     app.scene3D = scene;
     app.camera3D = camera;
 
-    // Hệ thống chiếu sáng Studio ACES Filmic (Cân bằng quang thông ~1.20, triệt tiêu gắt trắng và giữ 100% màu sắc PDF gốc)
-    const hemi = new THREE.HemisphereLight(0xffffff, 0xd4d8e0, 0.60);
+    // Ánh sáng Studio chuẩn xác (Tổng cường độ ~1.0 giữ nguyên 100% màu gốc của PDF, không bị cháy sáng hay đổi màu)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0xd0d4dc, 0.66);
     scene.add(hemi);
 
-    const key = new THREE.DirectionalLight(0xffffff, 0.38);
+    const key = new THREE.DirectionalLight(0xffffff, 0.34);
     key.position.set(-2.0, 5.5, 3.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     key.shadow.bias = -0.0004;
-    key.shadow.radius = 2.4;
+    key.shadow.radius = 2.0;
     key.shadow.camera.left = -2.2;
     key.shadow.camera.right = 2.2;
     key.shadow.camera.top = 2.0;
@@ -165,11 +165,11 @@
     key.shadow.camera.updateProjectionMatrix();
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight(0xffffff, 0.12);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.10);
     fill.position.set(3.0, 3.5, 2.5);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight(0xffffff, 0.10);
+    const rim = new THREE.DirectionalLight(0xffffff, 0.08);
     rim.position.set(2.0, 4.0, -3.0);
     scene.add(rim);
 
@@ -537,19 +537,17 @@
     }
     bUv.needsUpdate = true;
 
-    // Giữ nguyên 100% màu gốc tài liệu PDF/ảnh kết hợp hiệu ứng tơ lụa giấy MeshPhysicalMaterial
-    const coverFrontMat = new THREE.MeshPhysicalMaterial({
+    // Giữ nguyên 100% màu gốc tài liệu PDF/ảnh (Không ám vàng, không đổi màu, không lóa)
+    const coverFrontMat = new THREE.MeshStandardMaterial({
       map: coverTex,
-      roughness: 0.94,
+      roughness: 0.96,
       metalness: 0.0,
-      sheen: new THREE.Color(0x444444),
       side: THREE.FrontSide
     });
-    const coverBackMat = new THREE.MeshPhysicalMaterial({
+    const coverBackMat = new THREE.MeshStandardMaterial({
       map: p1Tex,
-      roughness: 0.94,
+      roughness: 0.96,
       metalness: 0.0,
-      sheen: new THREE.Color(0x444444),
       side: THREE.BackSide
     });
 
@@ -595,11 +593,10 @@
     lpos.needsUpdate = true;
     leftGeom.computeVertexNormals();
 
-    const leftPageMat = new THREE.MeshPhysicalMaterial({
+    const leftPageMat = new THREE.MeshStandardMaterial({
       map: p1Tex,
-      roughness: 0.94,
-      metalness: 0.0,
-      sheen: new THREE.Color(0x444444)
+      roughness: 0.96,
+      metalness: 0.0
     });
     const leftPageMesh = new THREE.Mesh(leftGeom, leftPageMat);
     leftPageMesh.rotation.x = -Math.PI / 2;
@@ -621,11 +618,10 @@
     rpos.needsUpdate = true;
     rightGeom.computeVertexNormals();
 
-    const rightPageMat = new THREE.MeshPhysicalMaterial({
+    const rightPageMat = new THREE.MeshStandardMaterial({
       map: p2Tex,
-      roughness: 0.94,
-      metalness: 0.0,
-      sheen: new THREE.Color(0x444444)
+      roughness: 0.96,
+      metalness: 0.0
     });
     const rightPageMesh = new THREE.Mesh(rightGeom, rightPageMat);
     rightPageMesh.rotation.x = -Math.PI / 2;
@@ -640,11 +636,10 @@
     subGeom1.translate((W - 0.01) / 2, 0, 0);
     const subGeom2 = subGeom1.clone();
 
-    const subLeafMat = new THREE.MeshPhysicalMaterial({
+    const subLeafMat = new THREE.MeshStandardMaterial({
       color: 0xfdfcf8,
-      roughness: 0.94,
+      roughness: 0.96,
       metalness: 0.0,
-      sheen: new THREE.Color(0x383838),
       normalMap: paperNorm,
       normalScale: paperNormScale
     });
@@ -703,19 +698,12 @@
     const pos = sheetGeom.attributes.position;
     sheetGeom.userData.basePos = Float32Array.from(pos.array);
 
-    // Khởi tạo thuộc tính màu đỉnh để tính toán đổ bóng hốc vòm (Cavity Ambient Occlusion)
-    const colorsF = new Float32Array(pos.count * 3);
-    colorsF.fill(1.0);
-    sheetGeom.setAttribute('color', new THREE.BufferAttribute(colorsF, 3));
-
-    // Mặt trước (Recto - Trang 2): 100% màu gốc chuẩn xác kết hợp Cavity AO và Sheen giấy mỹ thuật
-    const frontMat = new THREE.MeshPhysicalMaterial({
+    // Mặt trước (Recto - Trang 2): 100% màu gốc chuẩn xác, không bị biến đổi màu
+    const frontMat = new THREE.MeshStandardMaterial({
       map: p2Tex,
-      roughness: 0.94,
+      roughness: 0.96,
       metalness: 0.0,
-      sheen: new THREE.Color(0x484848),
-      side: THREE.FrontSide,
-      vertexColors: true
+      side: THREE.FrontSide
     });
     const frontMesh = new THREE.Mesh(sheetGeom, frontMat);
     frontMesh.rotation.x = -Math.PI / 2;
@@ -723,7 +711,7 @@
     frontMesh.castShadow = true;
     frontMesh.receiveShadow = true;
 
-    // Mặt sau (Verso - Trang 3): 100% màu gốc chuẩn xác kết hợp Cavity AO và Sheen giấy mỹ thuật
+    // Mặt sau (Verso - Trang 3): 100% màu gốc chuẩn xác, không bị biến đổi màu
     const backGeom = sheetGeom.clone();
     backGeom.userData.basePos = Float32Array.from(sheetGeom.userData.basePos);
     const uv = backGeom.attributes.uv;
@@ -732,17 +720,11 @@
     }
     uv.needsUpdate = true;
 
-    const colorsB = new Float32Array(pos.count * 3);
-    colorsB.fill(1.0);
-    backGeom.setAttribute('color', new THREE.BufferAttribute(colorsB, 3));
-
-    const backMat = new THREE.MeshPhysicalMaterial({
+    const backMat = new THREE.MeshStandardMaterial({
       map: p3Tex,
-      roughness: 0.94,
+      roughness: 0.96,
       metalness: 0.0,
-      sheen: new THREE.Color(0x484848),
-      side: THREE.BackSide,
-      vertexColors: true
+      side: THREE.BackSide
     });
     const backMesh = new THREE.Mesh(backGeom, backMat);
     backMesh.rotation.x = -Math.PI / 2;
@@ -752,11 +734,10 @@
 
     // Mép cắt giấy 3D (Physical 3D Fore-Edge Paper Rim - Trắng ngà tự nhiên)
     const activeRimGeom = createRimGeometry();
-    const activeRimMat = new THREE.MeshPhysicalMaterial({
+    const activeRimMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.94,
+      roughness: 0.96,
       metalness: 0.0,
-      sheen: new THREE.Color(0x383838),
       side: THREE.DoubleSide
     });
     const activeRimMesh = new THREE.Mesh(activeRimGeom, activeRimMat);
@@ -809,12 +790,6 @@
     const uCornerArr = new Float32Array(cols + 1);
     const takeOffArr = new Float32Array(cols + 1);
     const landArr = new Float32Array(cols + 1);
-    const occFArr = new Float32Array(cols + 1);
-    const occBArr = new Float32Array(cols + 1);
-
-    const archCavity = Math.sin(Math.PI * q) * 0.20 * curlIntensity;
-    const frontConcave = clamp((q - 0.35) / 0.30, 0, 1);
-    const backConcave = 1.0 - frontConcave;
     const takeOff = smooth7(clamp((0.10 - q) / 0.10, 0, 1));
     const land = smooth7(clamp((q - 0.90) / 0.10, 0, 1));
     const cushionWeight = (q > 0.65) ? Math.sin(Math.PI * clamp((q - 0.65) / 0.35, 0, 1)) : 0;
@@ -839,12 +814,6 @@
       const sInflect = -Math.sin(2.0 * Math.PI * u) * 0.09 * inflectWeight * curlIntensity;
 
       commonPhi[ix] = baseAngle + arch + roll + cushion + sInflect;
-
-      // Cavity AO
-      const spanCavity = archCavity * Math.sin(Math.PI * Math.pow(u, 0.72));
-      const spineCrease = (u < 0.16) ? (1.0 - u / 0.16) * 0.10 * Math.sin(Math.PI * q) : 0;
-      occFArr[ix] = clamp(1.0 - (spanCavity * frontConcave + spineCrease), 0.78, 1.0);
-      occBArr[ix] = clamp(1.0 - (spanCavity * backConcave + spineCrease), 0.78, 1.0);
     }
 
     // 2. Tinh chỉnh hiệu ứng lật góc chéo (Diagonal Corner Peel & Twist - Panel 2 Blueprint)
@@ -852,9 +821,6 @@
     const peelEnvelope = (q > 0.005 && q < 0.38)
       ? Math.sin(Math.PI * clamp((q - 0.005) / 0.375, 0, 1))
       : 0;
-
-    const colorAttrF = geomF.attributes.color;
-    const colorAttrB = geomB.attributes.color;
 
     // Tích phân từng hàng (Row-by-Row Inextensible Arc-Length Integration)
     for (let iy = 0; iy <= rows; iy++) {
@@ -899,18 +865,8 @@
 
         posF.setXYZ(idx, mx + halfThick * nx, y0, mz + halfThick * nz);
         posB.setXYZ(idx, mx - halfThick * nx, y0, mz - halfThick * nz);
-
-        if (colorAttrF && colorAttrB) {
-          const of = occFArr[ix];
-          const ob = occBArr[ix];
-          colorAttrF.setXYZ(idx, of, of, of);
-          colorAttrB.setXYZ(idx, ob, ob, ob);
-        }
       }
     }
-
-    if (colorAttrF) colorAttrF.needsUpdate = true;
-    if (colorAttrB) colorAttrB.needsUpdate = true;
 
     if (posR) {
       const numPts = boundaryIndices.length;
@@ -1106,80 +1062,87 @@
     const flipPhase = clamp((t - 4.2) / 1.4, 0, 1);
     const flipReaction = Math.sin(Math.PI * flipPhase) * 0.014;
 
-    const targetX = (W / 2) * (1 - coverOpenFactor) + microDriftX * 0.35;
+    // Khóa ổn định Tripod tuyệt đối cho Reader View (chữ đứng yên 100%, không bị lắc hay trôi khi đọc)
+    const isReader = (app.camera === 'reader');
+    const effDolly = isReader ? 1.0 : dollyFactor;
+    const effMicroDriftX = isReader ? 0 : microDriftX;
+    const effMicroDriftZ = isReader ? 0 : microDriftZ;
+    const effFlipReaction = isReader ? 0 : flipReaction;
+
+    const targetX = (W / 2) * (1 - coverOpenFactor) + effMicroDriftX * 0.35;
     const targetY = 0;
-    const targetZ = 0.02 + microDriftZ * 0.35;
+    const targetZ = 0.02 + effMicroDriftZ * 0.35;
 
     let dist, camX, camY, camZ;
 
     if (aspect >= 1.5) {
       // 16:9 Landscape
-      dist = 3.65 * dollyFactor;
+      dist = 3.65 * effDolly;
       if (app.camera === 'reader') {
-        camX = targetX + microDriftX;
-        camY = 2.65 * dollyFactor + flipReaction;
-        camZ = 1.95 * dollyFactor + microDriftZ;
+        camX = targetX;
+        camY = 2.65;
+        camZ = 1.95;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + microDriftX * 0.5;
-        camY = dist * Math.sin(angleRad) + flipReaction;
-        camZ = dist * Math.cos(angleRad) + 0.02 + microDriftZ;
+        camX = targetX + effMicroDriftX * 0.5;
+        camY = dist * Math.sin(angleRad) + effFlipReaction;
+        camZ = dist * Math.cos(angleRad) + 0.02 + effMicroDriftZ;
       } else {
         // Product 45°
-        camX = targetX + 0.52 * dollyFactor + microDriftX;
-        camY = 2.25 * dollyFactor + flipReaction;
-        camZ = 2.45 * dollyFactor + microDriftZ;
+        camX = targetX + 0.52 * effDolly + effMicroDriftX;
+        camY = 2.25 * effDolly + effFlipReaction;
+        camZ = 2.45 * effDolly + effMicroDriftZ;
       }
     } else if (aspect >= 1.2) {
       // 4:3 Standard
-      dist = 4.10 * dollyFactor;
+      dist = 4.10 * effDolly;
       if (app.camera === 'reader') {
-        camX = targetX + microDriftX;
-        camY = 3.10 * dollyFactor + flipReaction;
-        camZ = 2.30 * dollyFactor + microDriftZ;
+        camX = targetX;
+        camY = 3.10;
+        camZ = 2.30;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + microDriftX * 0.5;
-        camY = dist * Math.sin(angleRad) + flipReaction;
-        camZ = dist * Math.cos(angleRad) + 0.02 + microDriftZ;
+        camX = targetX + effMicroDriftX * 0.5;
+        camY = dist * Math.sin(angleRad) + effFlipReaction;
+        camZ = dist * Math.cos(angleRad) + 0.02 + effMicroDriftZ;
       } else {
-        camX = targetX + 0.58 * dollyFactor + microDriftX;
-        camY = 2.55 * dollyFactor + flipReaction;
-        camZ = 2.85 * dollyFactor + microDriftZ;
+        camX = targetX + 0.58 * effDolly + effMicroDriftX;
+        camY = 2.55 * effDolly + effFlipReaction;
+        camZ = 2.85 * effDolly + effMicroDriftZ;
       }
     } else if (aspect >= 0.9) {
       // 1:1 Square
-      dist = 4.60 * dollyFactor;
+      dist = 4.60 * effDolly;
       if (app.camera === 'reader') {
-        camX = targetX + microDriftX;
-        camY = 3.50 * dollyFactor + flipReaction;
-        camZ = 2.60 * dollyFactor + microDriftZ;
+        camX = targetX;
+        camY = 3.50;
+        camZ = 2.60;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + microDriftX * 0.5;
-        camY = dist * Math.sin(angleRad) + flipReaction;
-        camZ = dist * Math.cos(angleRad) + 0.02 + microDriftZ;
+        camX = targetX + effMicroDriftX * 0.5;
+        camY = dist * Math.sin(angleRad) + effFlipReaction;
+        camZ = dist * Math.cos(angleRad) + 0.02 + effMicroDriftZ;
       } else {
-        camX = targetX + 0.62 * dollyFactor + microDriftX;
-        camY = 2.95 * dollyFactor + flipReaction;
-        camZ = 3.25 * dollyFactor + microDriftZ;
+        camX = targetX + 0.62 * effDolly + effMicroDriftX;
+        camY = 2.95 * effDolly + effFlipReaction;
+        camZ = 3.25 * effDolly + effMicroDriftZ;
       }
     } else {
       // 9:16 Vertical
-      dist = 5.50 * dollyFactor;
+      dist = 5.50 * effDolly;
       if (app.camera === 'reader') {
-        camX = targetX + microDriftX;
-        camY = 4.20 * dollyFactor + flipReaction;
-        camZ = 3.20 * dollyFactor + microDriftZ;
+        camX = targetX;
+        camY = 4.20;
+        camZ = 3.20;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
-        camX = targetX + microDriftX * 0.5;
-        camY = dist * Math.sin(angleRad) + flipReaction;
-        camZ = dist * Math.cos(angleRad) + 0.02 + microDriftZ;
+        camX = targetX + effMicroDriftX * 0.5;
+        camY = dist * Math.sin(angleRad) + effFlipReaction;
+        camZ = dist * Math.cos(angleRad) + 0.02 + effMicroDriftZ;
       } else {
-        camX = targetX + 0.65 * dollyFactor + microDriftX;
-        camY = 3.55 * dollyFactor + flipReaction;
-        camZ = 3.90 * dollyFactor + microDriftZ;
+        camX = targetX + 0.65 * effDolly + effMicroDriftX;
+        camY = 3.55 * effDolly + effFlipReaction;
+        camZ = 3.90 * effDolly + effMicroDriftZ;
       }
     }
 
@@ -1621,46 +1584,23 @@
           framerate: fps
         });
 
-        // Canvas tích lũy màn trập quang học 180° (Cinematic Shutter Motion Blur)
-        const blurCanvas = document.createElement('canvas');
-        blurCanvas.width = w;
-        blurCanvas.height = h;
-        const blurCtx = blurCanvas.getContext('2d', { alpha: false });
-
-        console.log(`[EXPORT_LOG] Encoding ${totalFrames} video frames (30 FPS)...`);
+        console.log(`[EXPORT_LOG] Encoding ${totalFrames} video frames (30 FPS) directly from WebGL canvas (zero ghosting, 100% sharp)...`);
         for (let f = 0; f < totalFrames; f++) {
           if (encodeError) throw encodeError;
 
           const t = f / fps;
           app.time = t;
-
-          // Motion Blur quang học 180° trong pha lật trang tốc độ cao (4.15s -> 5.65s)
-          const isFastFlip = (t >= 4.15 && t <= 5.65);
-
-          if (isFastFlip) {
-            // Pass 1: Thời điểm đầu màn trập t_0
-            applyTime(t, w / h);
-            app.renderer.render(app.scene3D, app.camera3D);
-            blurCtx.globalAlpha = 1.0;
-            blurCtx.drawImage(app.renderer.domElement, 0, 0);
-
-            // Pass 2: Thời điểm giữa màn trập 180° (t_0 + 0.48 / fps)
-            const tSub = t + (0.48 / fps);
-            applyTime(tSub, w / h);
-            app.renderer.render(app.scene3D, app.camera3D);
-            blurCtx.globalAlpha = 0.5; // Tích phân hòa trộn 50/50 chuẩn quang học
-            blurCtx.drawImage(app.renderer.domElement, 0, 0);
-          } else {
-            applyTime(t, w / h);
-            app.renderer.render(app.scene3D, app.camera3D);
-            blurCtx.globalAlpha = 1.0;
-            blurCtx.drawImage(app.renderer.domElement, 0, 0);
-          }
+          applyTime(t, w / h);
+          app.renderer.render(app.scene3D, app.camera3D);
 
           const timestampMicroseconds = Math.round(f * (1000000 / fps));
-          const videoFrame = new VideoFrame(blurCanvas, { timestamp: timestampMicroseconds });
+          const videoFrame = new VideoFrame(app.renderer.domElement, { timestamp: timestampMicroseconds });
           encoder.encode(videoFrame, { keyFrame: f % 30 === 0 });
           videoFrame.close();
+
+          while (encoder.encodeQueueSize > 5) {
+            await new Promise(r => setTimeout(r, 10));
+          }
 
           const pct = Math.round(((f + 1) / totalFrames) * 100);
           button.innerHTML = `<span>⏳</span> Đang xuất video MP4: ${pct}%`;
@@ -1831,6 +1771,22 @@
       $('#curlAmountOut').value = `${e.target.value}%`;
       applyTime(app.time);
     };
+
+    const sampleRealBtn = $('#btnSampleRealBook');
+    if (sampleRealBtn) {
+      sampleRealBtn.onclick = async () => {
+        try {
+          toast('Đang nạp Sách Ảnh Thật (5 trang)...');
+          const res = await fetch('sample-real-book/Sach-Dinh-Duong-Mau.pdf');
+          if (!res.ok) throw Error('Không thể tải file PDF từ máy chủ.');
+          const blob = await res.blob();
+          const file = new File([blob], 'Sach-Dinh-Duong-Mau.pdf', { type: 'application/pdf' });
+          filesInput([file]);
+        } catch (err) {
+          toast(`Lỗi nạp file mẫu: ${err.message}`);
+        }
+      };
+    }
 
     const sampleBtn = $('#btnSamplePdf');
     if (sampleBtn) {
