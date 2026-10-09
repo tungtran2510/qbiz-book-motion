@@ -14,7 +14,7 @@
   <meta property="og:description" content="Tạo video lật sách 3D điện ảnh từ PDF / ảnh, uốn cong giấy tự nhiên và xuất MP4 1080p.">
   <meta property="og:image" content="logo-square.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="styles.css?v=20261010-phase2-slipstream">
+  <link rel="stylesheet" href="styles.css?v=20261010-phase3">
 </head>
 <body>
   <header class="topbar">
@@ -236,6 +236,24 @@
             <input type="text" id="watermarkInput" value="QBiz Book Motion" placeholder="Tên thương hiệu..." disabled>
           </div>
         </section>
+
+        <section class="control-section custom-book-section">
+          <div class="section-title">
+            <span class="step-number">06</span>
+            <div><b>Nạp sách riêng (PDF / Loạt ảnh)</b><small>Tải tài liệu tùy biến cho Mockup Studio</small></div>
+          </div>
+          <div class="custom-upload-box" id="customUploadDropzone">
+            <input id="customFileInput" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" multiple hidden>
+            <div class="upload-icon-circle">📂</div>
+            <b>Kéo thả PDF hoặc loạt ảnh vào đây</b>
+            <small>Hỗ trợ PDF đa trang, JPG, PNG, WEBP (Bảo toàn 100% sRGB)</small>
+            <div class="upload-action-row">
+              <button type="button" class="btn-subtle" id="btnChooseCustomFile">📁 Chọn file từ máy</button>
+              <button type="button" class="btn-subtle" id="btnResetDefaultBook">🔄 Nạp lại sách mẫu</button>
+            </div>
+            <div id="customFileStatus" class="custom-file-status">Đang dùng: Sách mẫu "Nguyên tắc Ăn uống.pdf" (11 trang)</div>
+          </div>
+        </section>
       </div>
 
       <footer class="export-footer">
@@ -251,6 +269,9 @@
         </button>
         <button class="snapshot-button" id="btnSnapshot4K" disabled>
           <span>📸</span> <span id="snapshotBtnText">Chụp ảnh Mockup 4K Ultra HD (PNG)</span>
+        </button>
+        <button class="batch-button" id="btnBatchCombo" disabled>
+          <span>📦</span> <span id="batchBtnText">Xuất Trọn Bộ Mockup Combo (ZIP: 3 Ảnh 4K + 2 Video)</span>
         </button>
       </footer>
     </aside>
@@ -278,7 +299,8 @@
   <script src="three.min.js"></script>
   <script src="OrbitControls.js"></script>
   <script src="mp4-muxer.min.js"></script>
+  <script src="jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="app.js?v=20261010-phase2-slipstream"></script>
+  <script src="app.js?v=20261010-phase3"></script>
 </body>
 </html>

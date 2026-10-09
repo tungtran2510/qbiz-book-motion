@@ -383,5 +383,118 @@
   cursor: not-allowed !important;
 }
 
+/* Phase 3: Combo Batch Export Button */
+.batch-button {
+  width: 100% !important;
+  height: 42px !important;
+  margin-top: 8px !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #c026d3 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 8px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.3px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.batch-button:hover:not(:disabled) {
+  filter: brightness(1.1) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5) !important;
+}
+
+.batch-button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  filter: grayscale(0.5) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Phase 3: Custom Book Upload Box */
+.custom-upload-box {
+  border: 1.5px dashed #2a4365 !important;
+  border-radius: 10px !important;
+  background: rgba(10, 20, 35, 0.6) !important;
+  padding: 14px 12px !important;
+  text-align: center !important;
+  margin-top: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.custom-upload-box.dragging {
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+}
+
+.upload-icon-circle {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto 6px !important;
+  font-size: 16px !important;
+}
+
+.custom-upload-box b {
+  display: block !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #f1f5f9 !important;
+  margin-bottom: 2px !important;
+}
+
+.custom-upload-box small {
+  display: block !important;
+  font-size: 10px !important;
+  color: #94a3b8 !important;
+  margin-bottom: 10px !important;
+}
+
+.upload-action-row {
+  display: flex !important;
+  gap: 8px !important;
+  justify-content: center !important;
+  margin-bottom: 8px !important;
+}
+
+.btn-subtle {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #cbd5e1 !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  padding: 6px 10px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: all 0.15s !important;
+}
+
+.btn-subtle:hover {
+  background: #334155 !important;
+  color: #ffffff !important;
+  border-color: #475569 !important;
+}
+
+.custom-file-status {
+  font-size: 10px !important;
+  color: #60a5fa !important;
+  background: rgba(30, 58, 102, 0.45) !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  display: inline-block !important;
+  word-break: break-all !important;
+}
+
 
 
