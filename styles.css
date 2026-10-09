@@ -183,4 +183,83 @@
   border-color: #5579a7;
 }
 
+/* --- PHASE 1: MULTI-ASPECT RATIO STAGE FRAMING & TRANSPARENT ALPHA SCENE --- */
+.swatch.transparent {
+  background-image:
+    linear-gradient(45deg, #64748b 25%, transparent 25%),
+    linear-gradient(-45deg, #64748b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #64748b 75%),
+    linear-gradient(-45deg, transparent 75%, #64748b 75%);
+  background-size: 6px 6px;
+  background-position: 0 0, 0 3px, 3px -3px, -3px 0;
+  border: 1px solid #475569 !important;
+  background-color: #1e293b;
+}
+
+.aspect-badge {
+  background: rgba(30, 58, 95, 0.75);
+  color: #9ec3fa;
+  font: 700 8.5px 'DM Mono';
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid #3d6494;
+  letter-spacing: 0.05em;
+  display: inline-block;
+}
+
+.stage-shell {
+  height: min(44vw, 500px) !important;
+  min-height: 400px !important;
+  position: relative !important;
+  overflow: hidden !important;
+  border: 1px solid #233852 !important;
+  border-radius: 13px !important;
+  background: #08121f !important;
+  background-image: radial-gradient(#1e334d 1px, transparent 1px) !important;
+  background-size: 24px 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 38px 14px 44px 14px !important;
+}
+
+#stage {
+  position: relative !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  max-width: 100% !important;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+  background: radial-gradient(ellipse at 52% 46%, #f7f6f2 0, #eceae4 72%, #dfddd6 100%);
+  transition: aspect-ratio 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.35s ease !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+#stage.scene-navy {
+  background: radial-gradient(ellipse at 52% 77%, #203857, #101e32 55%, #0b1625) !important;
+}
+
+#stage.scene-transparent {
+  background-color: #0b1726 !important;
+  background-image:
+    linear-gradient(45deg, #16273d 25%, transparent 25%),
+    linear-gradient(-45deg, #16273d 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #16273d 75%),
+    linear-gradient(-45deg, transparent 75%, #16273d 75%) !important;
+  background-size: 20px 20px !important;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px !important;
+}
+
+#stage canvas {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  outline: none !important;
+}
+
+
 

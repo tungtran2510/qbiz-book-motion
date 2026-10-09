@@ -1190,21 +1190,22 @@
         camZ = 3.25 * effDolly + effMicroDriftZ;
       }
     } else {
-      // 9:16 Vertical
-      dist = 5.50 * effDolly;
+      // 9:16 Vertical (Khung hình dọc TikTok / Reels / Shorts - Căn giữa tuyệt đối không chạm viền)
+      dist = 8.60 * effDolly;
       if (app.camera === 'reader') {
         camX = targetX;
-        camY = 4.20;
-        camZ = 3.20;
+        camY = 6.40;
+        camZ = 5.90;
       } else if (app.camera === 'top') {
         const angleRad = (86.0 * Math.PI) / 180;
         camX = targetX + effMicroDriftX * 0.5;
         camY = dist * Math.sin(angleRad) + effFlipReaction;
         camZ = dist * Math.cos(angleRad) + 0.02 + effMicroDriftZ;
       } else {
-        camX = targetX + 0.65 * effDolly + effMicroDriftX;
-        camY = 3.55 * effDolly + effFlipReaction;
-        camZ = 3.90 * effDolly + effMicroDriftZ;
+        // Product 45°
+        camX = targetX + 0.95 * effDolly + effMicroDriftX;
+        camY = 5.35 * effDolly + effFlipReaction;
+        camZ = 5.85 * effDolly + effMicroDriftZ;
       }
     }
 
@@ -1386,18 +1387,90 @@
   }
   window.updateTimeline = updateTimeline;
 
+  function updateExportLabels() {
+    const isTransparent = app.scene === 'transparent';
+    const isNavy = app.scene === 'navy';
+    const r = app.ratio || '16:9';
+
+    const sizes = {
+      '16:9': { export: '1920 × 1080 (16:9 Ngang)', snap: '3840 × 2160' },
+      '4:3':  { export: '1440 × 1080 (4:3 Chuẩn)', snap: '2880 × 2160' },
+      '9:16': { export: '1080 × 1920 (9:16 Dọc TikTok)', snap: '2160 × 3840' },
+      '1:1':  { export: '1080 × 1080 (1:1 Vuông Social)', snap: '2160 × 2160' }
+    };
+    const s = sizes[r] || sizes['16:9'];
+
+    const formatEl = $('#exportFormat');
+    const titleEl = $('#exportTitle');
+    const btnTextEl = $('#exportBtnText');
+    const snapBtnTextEl = $('#snapshotBtnText');
+
+    if (isTransparent) {
+      if (titleEl) titleEl.textContent = 'XUẤT VIDEO ALPHA (1080P)';
+      if (formatEl) formatEl.textContent = `${s.export} · WebM Alpha (Trong Suốt)`;
+      if (btnTextEl) btnTextEl.textContent = 'Xuất video WebM Alpha (Tách Nền)';
+      if (snapBtnTextEl) snapBtnTextEl.textContent = `Chụp ảnh Mockup 4K Tách Nền (${s.snap})`;
+    } else {
+      if (titleEl) titleEl.textContent = 'XUẤT VIDEO MP4 (1080P)';
+      if (formatEl) formatEl.textContent = `${s.export} · Chuẩn H.264`;
+      if (btnTextEl) btnTextEl.textContent = 'Xuất video MP4 1080p (H.264)';
+      if (snapBtnTextEl) snapBtnTextEl.textContent = `Chụp ảnh Mockup 4K Ultra HD (${s.snap})`;
+    }
+  }
+
   function setScene(scene) {
     app.scene = scene;
-    const shell = $('#stageShell');
-    shell.classList.toggle('scene-navy', scene === 'navy');
-    $('#sceneName').textContent = scene === 'navy' ? 'Premium Navy' : 'Studio trắng';
+    const stage = $('#stage');
+    const isNavy = scene === 'navy';
+    const isTransparent = scene === 'transparent';
+
+    if (stage) {
+      stage.classList.toggle('scene-navy', isNavy);
+      stage.classList.toggle('scene-transparent', isTransparent);
+    }
+
+    const sceneNameMap = {
+      white: 'Studio trắng',
+      navy: 'Premium Navy',
+      transparent: 'Trong suốt (Alpha)'
+    };
+    $('#sceneName').textContent = sceneNameMap[scene] || 'Studio trắng';
+
     if (app.scene3D) {
-      const navy = scene === 'navy';
-      app.scene3D.fog.color.set(navy ? 0x0f172a : 0xe5e2d9);
-      app.floor.material.color.set(navy ? 0x0f172a : 0xeeece4);
+      if (isTransparent) {
+        // Tắt sương mù để nền trong suốt tuyệt đối không bị phủ màu
+        app.scene3D.fog.near = 99999;
+        app.scene3D.fog.far = 100000;
+        if (app.floor) app.floor.visible = false;
+        if (app.contactShadow) {
+          app.contactShadow.visible = true;
+          app.contactShadow.material.opacity = 0.38; // Giữ bóng tiếp xúc đáy mềm mại
+        }
+        if (app.renderer) {
+          app.renderer.setClearColor(0x000000, 0);
+        }
+      } else {
+        // Phục hồi sàn và sương mù studio
+        app.scene3D.fog.near = 14;
+        app.scene3D.fog.far = 32;
+        app.scene3D.fog.color.set(isNavy ? 0x0f172a : 0xe5e2d9);
+        if (app.floor) {
+          app.floor.visible = true;
+          app.floor.material.color.set(isNavy ? 0x0f172a : 0xeeece4);
+        }
+        if (app.contactShadow) {
+          app.contactShadow.visible = true;
+          app.contactShadow.material.opacity = 1.0;
+        }
+        if (app.renderer) {
+          app.renderer.setClearColor(0x000000, 0);
+        }
+      }
       app.dirty = true;
     }
+
     $$('[data-scene]').forEach(b => b.classList.toggle('active', b.dataset.scene === scene));
+    updateExportLabels();
   }
 
   function setCamera(camera) {
@@ -1409,14 +1482,35 @@
   function setRatio(r) {
     app.ratio = r;
     $$('[data-ratio]').forEach(b => b.classList.toggle('active', b.dataset.ratio === r));
-    const sizes = {
-      '16:9': '1920 × 1080 (16:9 Ngang)',
-      '4:3': '1440 × 1080 (4:3 Chuẩn)',
-      '9:16': '1080 × 1920 (9:16 Dọc)',
-      '1:1': '1080 × 1080 (1:1 Vuông)'
+
+    const stage = $('#stage');
+    const ratioMap = {
+      '16:9': '16 / 9',
+      '4:3':  '4 / 3',
+      '9:16': '9 / 16',
+      '1:1':  '1 / 1'
     };
-    $('#exportFormat').textContent = `${sizes[r] || r} · Chuẩn H.264`;
-    applyTime(app.time);
+    if (stage) {
+      stage.style.aspectRatio = ratioMap[r] || '16 / 9';
+    }
+
+    const badge = $('#aspectBadge');
+    if (badge) {
+      const badgeLabels = {
+        '16:9': '16:9 NGANG',
+        '4:3':  '4:3 CHUẨN',
+        '9:16': '9:16 DỌC (TIKTOK)',
+        '1:1':  '1:1 VUÔNG'
+      };
+      badge.textContent = badgeLabels[r] || r;
+    }
+
+    updateExportLabels();
+
+    // Đồng bộ lại kích thước canvas và cự ly camera
+    setTimeout(() => {
+      resize();
+    }, 40);
     app.dirty = true;
   }
 
@@ -1590,7 +1684,7 @@
       let w4k = 3840, h4k = 2160;
       if (app.ratio === '4:3') { w4k = 2880; h4k = 2160; }
       else if (app.ratio === '9:16') { w4k = 2160; h4k = 3840; }
-      else if (app.ratio === '1:1') { w4k = 2560; h4k = 2560; }
+      else if (app.ratio === '1:1') { w4k = 2160; h4k = 2160; }
 
       const stageEl = $('#stage');
       const origW = stageEl.clientWidth;
@@ -1603,8 +1697,14 @@
       app.renderer.setSize(w4k, h4k, false);
       app.camera3D.aspect = w4k / h4k;
       app.camera3D.updateProjectionMatrix();
+      applyTime(app.time, w4k / h4k);
 
       app.renderer.render(app.scene3D, app.camera3D);
+
+      const isAlpha = app.scene === 'transparent';
+      const snapPrefix = isAlpha ? 'QBiz-Mockup-4K-Alpha' : 'QBiz-Mockup-4K';
+      const ratioStr = app.ratio.replace(':', 'x');
+      const timeStr = app.time.toFixed(1).replace('.', 's');
 
       // Trích xuất blob PNG bảo toàn 100% màu gốc không nén
       await new Promise(resolve => {
@@ -1612,8 +1712,7 @@
           if (blob) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            const timeStr = app.time.toFixed(1).replace('.', 's');
-            a.download = `QBiz-Mockup-4K-${app.motionStyle}-${timeStr}.png`;
+            a.download = `${snapPrefix}-${ratioStr}-${app.motionStyle}-${timeStr}.png`;
             a.href = url;
             document.body.appendChild(a);
             a.click();
@@ -1633,9 +1732,11 @@
       app.renderer.setSize(origW, origH, false);
       app.camera3D.aspect = origAspect;
       app.camera3D.updateProjectionMatrix();
+      applyTime(app.time, origAspect);
       app.renderer.render(app.scene3D, app.camera3D);
 
-      toast(`📸 Đã xuất ảnh Mockup 4K Ultra HD (${w4k}×${h4k}) thành công!`);
+      const typeLabel = isAlpha ? 'Tách Nền Trong Suốt' : 'Ultra HD';
+      toast(`📸 Đã xuất ảnh Mockup 4K ${typeLabel} (${w4k}×${h4k}) thành công!`);
     } catch (err) {
       console.error('Snapshot 4K error:', err);
       toast(`Lỗi chụp 4K: ${err.message}`);
@@ -1676,10 +1777,70 @@
       app.camera3D.aspect = w / h;
       app.camera3D.updateProjectionMatrix();
 
-      // Kiểm tra nếu có WebCodecs VideoEncoder & Mp4Muxer
-      const hasWebCodecs = typeof VideoEncoder !== 'undefined' && typeof Mp4Muxer !== 'undefined';
+      // Kiểm tra chế độ phông nền trong suốt
+      const isTransparent = (app.scene === 'transparent');
 
-      if (hasWebCodecs) {
+      if (isTransparent) {
+        button.innerHTML = '<span>⚡</span> Đang chuẩn bị xuất WebM Alpha (Trong Suốt)…';
+        const stream = app.renderer.domElement.captureStream(fps);
+
+        let audioCtx = null;
+        let audioSource = null;
+        if (app.audioEnabled) {
+          try {
+            const aRes = await fetch('sound_master_10s.wav');
+            if (aRes.ok) {
+              const aBuf = await aRes.arrayBuffer();
+              audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+              const dest = audioCtx.createMediaStreamDestination();
+              audioSource = audioCtx.createBufferSource();
+              audioSource.buffer = await audioCtx.decodeAudioData(aBuf);
+              audioSource.connect(dest);
+              const audioTrack = dest.stream.getAudioTracks()[0];
+              if (audioTrack) stream.addTrack(audioTrack);
+              audioSource.start(0);
+            }
+          } catch (ae) {
+            console.warn('Transparent audio capture skipped:', ae);
+          }
+        }
+
+        const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+        const mr = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16000000 });
+        const chunks = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        mr.start(100);
+
+        for (let f = 0; f < totalFrames; f++) {
+          const t = f / fps;
+          app.time = t;
+          applyTime(t, w / h);
+          app.renderer.render(app.scene3D, app.camera3D);
+
+          const pct = Math.round(((f + 1) / totalFrames) * 100);
+          button.innerHTML = `<span>⏳</span> Đang xuất WebM Alpha: ${pct}%`;
+          updateTimeline();
+
+          await new Promise(r => setTimeout(r, 1000 / fps));
+        }
+
+        button.innerHTML = '<span>⚙</span> Đang hoàn tất đóng gói file WebM…';
+        mr.stop();
+        await new Promise(r => mr.onstop = r);
+        if (audioSource) { try { audioSource.stop(); } catch(e){} }
+        if (audioCtx) { try { await audioCtx.close(); } catch(e){} }
+
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `QBiz-Book-Motion-Alpha-${app.ratio.replace(':', 'x')}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+
+        toast(`✨ Đã xuất video WebM Alpha (${w}×${h}) tách nền trong suốt thành công!`);
+      } else if (hasWebCodecs) {
         console.log('[EXPORT_LOG] Starting WebCodecs export...');
         button.innerHTML = '<span>⚡</span> Đang nạp âm thanh & chuẩn bị…';
 

@@ -14,7 +14,7 @@
   <meta property="og:description" content="Tạo video lật sách 3D điện ảnh từ PDF / ảnh, uốn cong giấy tự nhiên và xuất MP4 1080p.">
   <meta property="og:image" content="logo-square.png">
   <meta property="og:type" content="website">
-  <link rel="stylesheet" href="styles.css?v=20261009-v6">
+  <link rel="stylesheet" href="styles.css?v=20261010-phase1-ratios-alpha">
 </head>
 <body>
   <header class="topbar">
@@ -41,7 +41,13 @@
 
       <div class="stage-shell scene-white" id="stageShell">
         <div class="stage-grid"></div>
-        <div class="render-label"><span>3D BOOK ENGINE</span><span id="qualityLabel">60 FPS · SMOOTH BEND</span></div>
+        <div class="render-label">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span>3D BOOK ENGINE</span>
+            <span id="aspectBadge" class="aspect-badge">16:9 NGANG</span>
+          </div>
+          <span id="qualityLabel">60 FPS · SMOOTH BEND</span>
+        </div>
         <div id="stage"></div>
         <div class="stage-empty" id="emptyState">
           <div class="empty-book">▱</div>
@@ -117,13 +123,13 @@
         <section class="control-section">
           <div class="section-title">
             <span class="step-number">02</span>
-            <div><b>Khung video</b><small>Chọn tỷ lệ xuất bản</small></div>
+            <div><b>Khung video</b><small>Tỷ lệ xuất bản màn hình</small></div>
           </div>
           <div class="ratio-grid">
             <button class="ratio active" data-ratio="16:9"><span class="ratio-icon wide"></span><span>16:9 (Ngang)</span></button>
-            <button class="ratio" data-ratio="4:3"><span class="ratio-icon standard"></span><span>4:3 (Chuẩn)</span></button>
-            <button class="ratio" data-ratio="9:16"><span class="ratio-icon tall"></span><span>9:16 (Dọc)</span></button>
+            <button class="ratio" data-ratio="9:16"><span class="ratio-icon tall"></span><span>9:16 (Dọc TikTok)</span></button>
             <button class="ratio" data-ratio="1:1"><span class="ratio-icon square"></span><span>1:1 (Vuông)</span></button>
+            <button class="ratio" data-ratio="4:3"><span class="ratio-icon standard"></span><span>4:3 (Chuẩn)</span></button>
           </div>
         </section>
 
@@ -136,6 +142,7 @@
           <div class="choice-row">
             <button class="choice active" data-scene="white"><i class="swatch white"></i>Studio trắng</button>
             <button class="choice" data-scene="navy"><i class="swatch navy"></i>Premium Navy</button>
+            <button class="choice" data-scene="transparent"><i class="swatch transparent"></i>Trong suốt (Alpha)</button>
           </div>
           <div class="field-label second">GÓC NHÌN (CAMERA)</div>
           <div class="choice-row camera-row">
@@ -213,16 +220,16 @@
       <footer class="export-footer">
         <div class="export-summary">
           <div>
-            <b>XUẤT VIDEO MP4 (1080P)</b>
+            <b id="exportTitle">XUẤT VIDEO (1080P)</b>
             <small id="exportFormat">1920 × 1080 (16:9 Ngang) · Chuẩn H.264</small>
           </div>
           <span class="badge-ready">SẴN SÀNG</span>
         </div>
         <button class="export-button" id="exportButton" disabled>
-          <span>▶</span> Xuất video MP4 1080p (H.264)
+          <span>▶</span> <span id="exportBtnText">Xuất video MP4 1080p (H.264)</span>
         </button>
         <button class="snapshot-button" id="btnSnapshot4K" disabled>
-          <span>📸</span> Chụp ảnh Mockup 4K Ultra HD (PNG)
+          <span>📸</span> <span id="snapshotBtnText">Chụp ảnh Mockup 4K Ultra HD (PNG)</span>
         </button>
       </footer>
     </aside>
@@ -251,6 +258,6 @@
   <script src="OrbitControls.js"></script>
   <script src="mp4-muxer.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="app.js?v=20261009-motion-presets-v6"></script>
+  <script src="app.js?v=20261010-phase1-ratios-alpha"></script>
 </body>
 </html>
